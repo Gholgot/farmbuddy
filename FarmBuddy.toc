@@ -1,0 +1,70 @@
+## Interface: 120001
+## Title: FarmBuddy
+## Notes: Mount and Achievement farming recommendations sorted by remaining effort
+## Author: FarmBuddy
+## Version: 1.2.0
+## SavedVariables: FarmBuddyDB
+## SavedVariablesPerCharacter: FarmBuddyCharDB
+## IconTexture: Interface\Icons\INV_Misc_Map_01
+## X-Category: Collections
+
+# Core
+Core\Init.lua
+Core\Constants.lua
+Core\Localization.lua
+Core\Utils.lua
+Core\Events.lua
+Core\Async.lua
+Core\Profiler.lua
+Core\SlashCommands.lua
+
+# Storage
+Storage\SavedVars.lua
+Storage\CharacterData.lua
+
+# Data
+Data\ExpansionData.lua
+Data\InstanceData.lua
+Data\MountDB.lua
+Data\MountDB_Generated.lua
+Data\AchievementDB.lua
+
+# Scoring Engine
+Scoring\ProgressResolver.lua
+Scoring\TimeGateResolver.lua
+Scoring\ScoringEngine.lua
+
+# Mounts Module
+Mounts\MountResolver.lua
+Mounts\MountScanner.lua
+Mounts\WeeklyTracker.lua
+
+# Achievements Module
+Achievements\AchievementResolver.lua
+Achievements\AchievementScanner.lua
+Achievements\ZoneGrouper.lua
+
+# UI Widgets
+UI\Widgets\ScrollList.lua
+UI\Widgets\ProgressBar.lua
+UI\Widgets\FilterBar.lua
+UI\Widgets\ModelPreview.lua
+UI\Widgets\ScoreBar.lua
+
+# UI
+UI\TabManager.lua
+UI\MainFrame.lua
+UI\MountSearchTab.lua
+UI\MountRecommendTab.lua
+UI\AchievementTab.lua
+UI\WeeklyTab.lua
+UI\ExpansionProgressTab.lua
+UI\SettingsTab.lua
+UI\Tracker.lua
+
+# Features (loaded after UI)
+Core\MinimapButton.lua
+Core\Tooltips.lua
+Core\Notifications.lua
+Core\Export.lua
+Core\TestHarness.lua

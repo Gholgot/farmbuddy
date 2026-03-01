@@ -1,0 +1,1 @@
+{"_links": {"self": {"href": "https://eu.api.blizzard.com/data/wow/mount/1690?namespace=static-12.0.0_65028-eu"}}, "id": 1690, "name": "Whelpling", "creature_displays": [{"key": {"href": "https://eu.api.blizzard.com/data/wow/media/creature-display/107459?namespace=static-12.0.0_65028-eu"}, "id": 107459}], "description": null, "should_exclude_if_uncollected": true}
