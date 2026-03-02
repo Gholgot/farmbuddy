@@ -1,4 +1,4 @@
-## Interface: 120100
+## Interface: 120001
 ## Title: FarmBuddy
 ## Notes: Mount and Achievement farming recommendations sorted by remaining effort
 ## Author: FarmBuddy

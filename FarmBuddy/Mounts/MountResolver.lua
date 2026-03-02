@@ -1357,7 +1357,7 @@ local EXPANSION_INDEX = {
     WOD = 5, LEGION = 6, BFA = 7, SL = 8, DF = 9, TWW = 10,
     MIDNIGHT = 11,
 }
-local CURRENT_EXPANSION_INDEX = 10  -- TWW (The War Within); update to 11 when Midnight launches
+local CURRENT_EXPANSION_INDEX = 11  -- Midnight
 
 -- Get a time multiplier based on content age (old content is trivially fast to clear)
 function FB.Mounts.Resolver:GetLegacyMultiplier(expansion)
