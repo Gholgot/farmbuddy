@@ -50,8 +50,10 @@ function FB.MinimapButton:Create()
     bg:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     -- Border overlay (minimap style ring)
+    -- MiniMap-TrackingBorder must be 56x56 to center correctly around the icon;
+    -- using 54x54 causes the ring to be rendered off-center relative to the icon.
     local border = button:CreateTexture(nil, "OVERLAY")
-    border:SetSize(54, 54)
+    border:SetSize(56, 56)
     border:SetPoint("CENTER")
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 

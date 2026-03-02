@@ -3,9 +3,10 @@ local addonName, FB = ...
 FB.Storage = FB.Storage or {}
 
 local DEFAULTS_ACCOUNT = {
-    version = 1,
+    version = 2,
     settings = {
         debug = false,
+        hoursPerDay = 2,  -- FIX-6: configurable playtime assumption (0.5-8h)
         weights = {
             progressRemaining = 1.0,
             timePerAttempt    = 1.0,
@@ -62,6 +63,21 @@ local DEFAULTS_ACCOUNT = {
     cachedAchievementScores = nil,
     characters = {},
     mountAttempts = {},  -- { [spellID] = lastAttemptTimestamp } for staleness tracking
+    mountAttemptCounts = {},  -- { [spellID] = { total = N, first = timestamp, last = timestamp } }
+    sessionHistory = {},      -- { { timestamp, durationMins, activitiesCompleted = N, mountsObtained = {} } }
+    goals = {
+        targetMountCount = nil,     -- e.g., 500
+        targetExpansion = nil,      -- e.g., "BFA"
+        customGoalMounts = {},      -- { [spellID] = true }
+    },
+    behaviorLog = {
+        sourceTypeClicks = {},   -- { [sourceType] = count }
+        sourceTypeSkips = {},    -- { [sourceType] = count }
+        avgSessionMinutes = 0,
+        totalSessions = 0,
+    },
+    lastResetNotification = 0,   -- Timestamp of last weekly reset notification
+    eventNotifications = {},     -- { [eventKey] = timestamp } for holiday event deduplication
 }
 
 local DEFAULTS_CHAR = {
@@ -113,6 +129,18 @@ end
 function FB.Storage:MigrateAccount(db)
     if (db.version or 0) < 1 then
         db.version = 1
+    end
+    if (db.version or 0) < 2 then
+        db.version = 2
+        -- Migrate flat mountAttempts timestamps to mountAttemptCounts
+        if db.mountAttempts then
+            db.mountAttemptCounts = db.mountAttemptCounts or {}
+            for spellID, timestamp in pairs(db.mountAttempts) do
+                if type(timestamp) == "number" and not db.mountAttemptCounts[spellID] then
+                    db.mountAttemptCounts[spellID] = { total = 1, first = timestamp, last = timestamp }
+                end
+            end
+        end
     end
     -- Migrate old weight key: dropChance -> effort
     if db.settings and db.settings.weights then

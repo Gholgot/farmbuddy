@@ -10,6 +10,8 @@ local filterBar
 local scoreBar
 local modelPreview
 local scanResults = nil
+-- NOTE: selectedMount is intentionally module-level (not persisted). It is cleared
+-- on tab switch, which is a known limitation — selection is not restored after switching tabs.
 local selectedMount = nil
 local scanHandle = nil
 
@@ -38,6 +40,8 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     progressBar:SetOnCancel(function()
         FB.UI.MountRecommendTab:CancelScan()
     end)
+    -- Hide by default to prevent overlap with filterBar (both anchor to the same point)
+    progressBar.frame:Hide()
 
     -- Filter bar
     filterBar = FB.UI.Widgets:CreateFilterBar(panel, "FarmBuddyMountRecommendFilters")
@@ -54,6 +58,8 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     filterBar:AddCheckbox("showVendor", "Vend", true)
     filterBar:AddCheckbox("showEvent", "Event", true)
     filterBar:AddCheckbox("showProfession", "Prof", true)
+    filterBar:AddCheckbox("showPvP", "PvP", true)
+    filterBar:AddCheckbox("showTradingPost", "TP", true)
     filterBar:AddCheckbox("soloOnly", "Solo", false)
     filterBar:AddCheckbox("availableOnly", "Avail", false)
     -- Expansion filter dropdown
@@ -85,6 +91,14 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     filterBar:SetOnChange(function()
         FB.UI.MountRecommendTab:ApplyFilters()
     end)
+
+    -- Goal progress display (shown when a goal is active)
+    local goalBar = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    goalBar:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", 0, -2)
+    goalBar:SetPoint("RIGHT", filterBar.frame, "RIGHT", 0, 0)
+    goalBar:SetJustifyH("LEFT")
+    goalBar:Hide()
+    self.goalBar = goalBar
 
     -- Results area: left list + right details (anchored below filter bar)
     local contentFrame = CreateFrame("Frame", nil, panel)
@@ -295,7 +309,7 @@ local BUILT_IN_PRESETS = {
             showRaidDrop = true, showDungeonDrop = true, showWorldDrop = true,
             showReputation = true, showCurrency = true, showQuestChain = true,
             showAchievement = true, showVendor = true, showEvent = true,
-            showProfession = true,
+            showProfession = true, showPvP = true, showTradingPost = true,
         },
     },
     {
@@ -304,7 +318,8 @@ local BUILT_IN_PRESETS = {
             showRaidDrop = true, showDungeonDrop = false, showWorldDrop = false,
             showReputation = false, showCurrency = false, showQuestChain = false,
             showAchievement = false, showVendor = false, showEvent = false,
-            showProfession = false, soloOnly = false, availableOnly = false,
+            showProfession = false, showPvP = false, showTradingPost = false,
+            soloOnly = false, availableOnly = false,
         },
     },
     {
@@ -314,7 +329,7 @@ local BUILT_IN_PRESETS = {
             showRaidDrop = true, showDungeonDrop = true, showWorldDrop = false,
             showReputation = false, showCurrency = false, showQuestChain = false,
             showAchievement = false, showVendor = false, showEvent = false,
-            showProfession = false,
+            showProfession = false, showPvP = false, showTradingPost = false,
         },
     },
     {
@@ -323,7 +338,8 @@ local BUILT_IN_PRESETS = {
             showRaidDrop = false, showDungeonDrop = false, showWorldDrop = false,
             showReputation = true, showCurrency = true, showQuestChain = false,
             showAchievement = false, showVendor = true, showEvent = false,
-            showProfession = false, soloOnly = false, availableOnly = false,
+            showProfession = false, showPvP = false, showTradingPost = true,
+            soloOnly = false, availableOnly = false,
         },
     },
     {
@@ -332,7 +348,8 @@ local BUILT_IN_PRESETS = {
             showRaidDrop = true, showDungeonDrop = true, showWorldDrop = true,
             showReputation = true, showCurrency = true, showQuestChain = true,
             showAchievement = true, showVendor = true, showEvent = true,
-            showProfession = true, soloOnly = false, availableOnly = false,
+            showProfession = true, showPvP = true, showTradingPost = true,
+            soloOnly = false, availableOnly = false,
         },
     },
 }
@@ -395,6 +412,12 @@ end
 
 function FB.UI.MountRecommendTab:SaveCurrentPreset()
     if not filterBar then return end
+
+    -- Reuse existing dialog frame if it was already created
+    if _G["FarmBuddyPresetDialog"] then
+        _G["FarmBuddyPresetDialog"]:Show()
+        return
+    end
 
     -- Prompt for name via a simple input dialog
     local dialog = CreateFrame("Frame", "FarmBuddyPresetDialog", UIParent, "BackdropTemplate")
@@ -530,6 +553,9 @@ function FB.UI.MountRecommendTab:ApplyFilters()
     local filters = filterBar:GetFilters()
     local filtered = FB.Mounts.Scanner:FilterResults(scanResults, filters)
 
+    -- Update goal progress display
+    self:UpdateGoalProgress(filtered)
+
     -- Limit results based on maxResults setting
     local maxResults = tonumber(filters.maxResults) or 20
     if maxResults > 0 and #filtered > maxResults then
@@ -554,6 +580,12 @@ end
 
 function FB.UI.MountRecommendTab:SelectMount(item)
     if not item then return end
+
+    -- Track click for behavior learning
+    if FB.BehaviorTracker and FB.BehaviorTracker.RecordClick and item.sourceType then
+        FB.BehaviorTracker:RecordClick(item.sourceType)
+    end
+
     selectedMount = item
 
     -- Update score breakdown
@@ -578,6 +610,39 @@ function FB.UI.MountRecommendTab:SelectMount(item)
 
     -- Use shared detail builder (false = don't show collected status on recommend tab)
     local lines, steps = FB.Utils:BuildMountDetailLines(item, false)
+
+    -- Add synergy info if available
+    if item.synergies and #item.synergies > 0 and FB.SynergyResolver then
+        local synergyLines = FB.SynergyResolver:FormatSynergies(item.synergies)
+        if synergyLines and #synergyLines > 0 then
+            lines[#lines + 1] = ""
+            lines[#lines + 1] = FB.COLORS.GREEN .. "Achievement Synergies:|r"
+            for _, sl in ipairs(synergyLines) do
+                lines[#lines + 1] = "  " .. sl
+            end
+        end
+    end
+
+    -- Add diminishing returns info if available
+    if item.attemptCount and item.attemptCount > 0 and item.dropChance and item.dropChance > 0 then
+        local expected = math.ceil(1 / item.dropChance)
+        lines[#lines + 1] = ""
+        if item.attemptCount > expected then
+            local pUnlucky = math.pow(1 - item.dropChance, item.attemptCount) * 100
+            lines[#lines + 1] = string.format(
+                "%sAttempts:|r %d / %d expected (unluckiest %.0f%% of players)",
+                FB.COLORS.ORANGE, item.attemptCount, expected, pUnlucky
+            )
+            if item.attemptCount > expected * 3 then
+                lines[#lines + 1] = FB.COLORS.YELLOW .. "Consider diversifying to other mounts.|r"
+            end
+        else
+            lines[#lines + 1] = string.format(
+                "%sAttempts:|r %d / %d expected",
+                FB.COLORS.GOLD, item.attemptCount, expected
+            )
+        end
+    end
 
     -- Store resolved steps for the pin button
     selectedMount._resolvedSteps = steps
@@ -612,4 +677,56 @@ function FB.UI.MountRecommendTab:SelectMount(item)
 
     -- Show pin button for any recommended mount
     self.pinBtn:Show()
+end
+
+function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
+    if not self.goalBar then return end
+    if not FB.db or not FB.db.goals then
+        self.goalBar:Hide()
+        return
+    end
+
+    local goals = FB.db.goals
+    local text = nil
+
+    if goals.targetExpansion then
+        -- Count uncollected mounts for this expansion using cachedMountScores (which has expansion annotations)
+        local remaining = 0
+        if FB.db and FB.db.cachedMountScores then
+            for _, r in ipairs(FB.db.cachedMountScores) do
+                if r.expansion == goals.targetExpansion then
+                    remaining = remaining + 1
+                end
+            end
+        end
+        local expName = FB.EXPANSION_NAMES[goals.targetExpansion] or goals.targetExpansion
+        text = string.format(
+            "%sGoal:|r %s completion - %d mounts remaining",
+            FB.COLORS.GOLD, expName, remaining
+        )
+    elseif goals.targetMountCount then
+        local currentCount = 0
+        if C_MountJournal and C_MountJournal.GetMountIDs then
+            local mountIDs = C_MountJournal.GetMountIDs()
+            if mountIDs then
+                for _, mid in ipairs(mountIDs) do
+                    local _, _, _, _, _, _, _, _, _, _, isCollected = C_MountJournal.GetMountInfoByID(mid)
+                    if isCollected then currentCount = currentCount + 1 end
+                end
+            end
+        end
+        local pct = goals.targetMountCount > 0
+            and math.floor(currentCount / goals.targetMountCount * 100) or 0
+        text = string.format(
+            "%sGoal:|r %d / %d mounts (%d%%)",
+            FB.COLORS.GOLD, currentCount, goals.targetMountCount, pct
+        )
+    end
+
+    if text then
+        self.goalBar:SetText(text)
+        self.goalBar:Show()
+    else
+        self.goalBar:Hide()
+    end
 end

@@ -188,6 +188,45 @@ function FB.Achievements.Resolver:Resolve(achievementID)
 
     local categoryDefaults = FB.AchievementDB:GetCategoryDefaults(categoryName)
 
+    -- S6: Refine category defaults by expansion detection
+    -- Current raids need groups and take longer than legacy raids
+    if categoryDefaults then
+        local lowerName = (name or ""):lower()
+        local lowerDesc = (description or ""):lower()
+        local combinedText = lowerName .. " " .. lowerDesc
+
+        -- Detect expansion from achievement text
+        local isCurrentExpansion = combinedText:find("war within") or combinedText:find("khaz algar")
+            or combinedText:find("nerub%-ar") or combinedText:find("undermine")
+            or combinedText:find("midnight") or combinedText:find("quel'thalas")
+        local isLegacy = not isCurrentExpansion
+
+        local isCatRaid = (categoryName and (categoryName:find("Raid") or categoryName:find("raid")))
+        local isCatDungeon = (categoryName and (categoryName:find("Dungeon") or categoryName:find("dungeon")))
+
+        if isCatRaid then
+            if isLegacy then
+                categoryDefaults = FB.Utils:ShallowCopy(categoryDefaults)
+                categoryDefaults.timePerCriterion = 8
+                categoryDefaults.groupRequirement = "solo"
+            else
+                categoryDefaults = FB.Utils:ShallowCopy(categoryDefaults)
+                categoryDefaults.timePerCriterion = 25
+                categoryDefaults.groupRequirement = "small"
+            end
+        elseif isCatDungeon then
+            if isLegacy then
+                categoryDefaults = FB.Utils:ShallowCopy(categoryDefaults)
+                categoryDefaults.timePerCriterion = 5
+                categoryDefaults.groupRequirement = "solo"
+            else
+                categoryDefaults = FB.Utils:ShallowCopy(categoryDefaults)
+                categoryDefaults.timePerCriterion = 15
+                categoryDefaults.groupRequirement = "small"
+            end
+        end
+    end
+
     -- Check for per-achievement override
     local override = FB.AchievementDB:Get(achievementID)
     local meta = override or categoryDefaults

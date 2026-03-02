@@ -66,26 +66,47 @@ function FB.Scoring:Score(input, weights)
     -- COMPUTE EFFORT FIRST — needed to scale progress for guaranteed mounts
     -- ===================================================================
 
-    -- Component 5: Total Expected Effort (computed early, used by progressScore)
-    local expectedAttempts = math.max(1, input.expectedAttempts or 1)
+    -- FIX-2: Detect unknown-drop mounts (drop types without verified rates)
+    -- Uses FB.DROP_SOURCE_TYPES defined in Core\Constants.lua (MED-2)
+    local isDropType = FB.DROP_SOURCE_TYPES[input.sourceType or ""] or false
+    local isUnknownDrop = isDropType and not dropChance
 
-    -- For RNG drop items: derive expected attempts from drop chance
+    -- Component 5: Total Expected Effort (computed early, used by progressScore)
+    local expectedAttempts
     if dropChance and dropChance > 0 and dropChance < 1 then
         expectedAttempts = math.ceil(1 / dropChance)
+    elseif isUnknownDrop then
+        -- FIX-2: Unknown drop rate — use nil for display, conservative placeholder for scoring
+        expectedAttempts = nil  -- Will use placeholder below for effort calc
+    else
+        expectedAttempts = math.max(1, input.expectedAttempts or 1)
     end
 
-    local totalMinutes = expectedAttempts * timePerAttempt
-    local totalDays = totalMinutes / (60 * 2)  -- Assume 2 hours playtime/day
+    -- FIX-6: Configurable playtime assumption
+    local hoursPerDay = (FB.db and FB.db.settings and FB.db.settings.hoursPerDay) or 2
+    hoursPerDay = math.max(0.5, math.min(8, hoursPerDay))
+
+    -- For unknown drops, use conservative placeholder (50 runs) for effort scoring
+    local effortAttempts = expectedAttempts or 50
+    local totalMinutes = effortAttempts * timePerAttempt
+    local totalDays = totalMinutes / (60 * hoursPerDay)
 
     -- Calendar time: how many real days must pass due to time-gating
     local calendarDays
     local gateMultiplier = FB.TIME_GATE_FACTORS[input.timeGate or "none"] or 0
     local timeGate = input.timeGate or "none"
-    -- Warband acceleration: multiple characters increase attempts per lockout period
+    -- FIX-5: Warband acceleration respects lockout scope
+    -- Per-account lockouts (world bosses) don't benefit from alts
     local warbandAvailable = input.warbandAvailable
     local warbandTotal = input.warbandTotal
-    local warbandMultiplier = (warbandAvailable and warbandAvailable > 1 and gateMultiplier > 0)
-        and warbandAvailable or 1
+    local lockoutScope = input.lockoutScope or "character"
+    local warbandMultiplier
+    if lockoutScope == "account" then
+        warbandMultiplier = 1  -- Per-account: alts don't help
+    else
+        warbandMultiplier = (warbandAvailable and warbandAvailable > 1 and gateMultiplier > 0)
+            and warbandAvailable or 1
+    end
 
     if timeGate == "yearly" then
         -- Yearly events give ~14 daily attempts during a 2-week window
@@ -100,12 +121,12 @@ function FB.Scoring:Score(input, weights)
                 calendarDays = 99999
             end
         else
-            local eventsNeeded = math.ceil(expectedAttempts / attemptsPerEvent)
+            local eventsNeeded = math.ceil(effortAttempts / attemptsPerEvent)
             calendarDays = eventsNeeded * 365
         end
     elseif gateMultiplier > 0 then
         -- Non-yearly gated: warband divides calendar days (more alts = faster)
-        calendarDays = (expectedAttempts * gateMultiplier) / warbandMultiplier
+        calendarDays = (effortAttempts * gateMultiplier) / warbandMultiplier
     else
         calendarDays = totalDays
     end
@@ -121,6 +142,12 @@ function FB.Scoring:Score(input, weights)
     -- Normalize effort score (0-100) using log scale for better spread
     -- log scale: 1d=0, 7d=30, 30d=51, 100d=69, 365d=89
     local effortScore = math.min(100, math.log(effectiveDays + 1) * 15)
+
+    -- FIX-2: Confidence penalty for unknown-drop mounts
+    -- Rank lower than known-rate mounts with similar time/lockout
+    if isUnknownDrop then
+        effortScore = effortScore * 1.15  -- 15% penalty
+    end
 
     -- ===================================================================
     -- COMPUTE REMAINING COMPONENTS
@@ -180,9 +207,26 @@ function FB.Scoring:Score(input, weights)
     -- subtractions. This prevents low-score mounts from clamping to 0
     -- and ensures easy mounts remain differentiable from each other.
 
-    -- Boost items available right now (25% discount)
+    -- Availability bonus: scaled by time gate and prerequisite status
+    -- S1: Only apply full discount for drop mounts or mounts with met prerequisites
+    -- S2: Scale discount by time gate instead of flat 25%
     if immediatelyAvailable then
-        score = score * 0.75
+        local isDropMount = (dropChance and dropChance > 0 and dropChance < 1)
+        local prerequisiteMet = (progressRemaining <= 0) or isDropMount
+
+        if prerequisiteMet then
+            -- S2: Graduated bonus by time gate
+            local availabilityDiscounts = {
+                none = 0.25,    -- Unlimited farm: full discount
+                daily = 0.15,   -- Daily gated: moderate discount
+                weekly = 0.10,  -- Weekly gated: smaller discount
+                yearly = 0.08,  -- Yearly event: minimal discount
+            }
+            local discount = availabilityDiscounts[input.timeGate or "none"] or 0.15
+            score = score * (1 - discount)
+        end
+        -- S1: Non-drop mounts with incomplete progress get NO availability bonus
+        -- (e.g., vendor mount needing Exalted when player is at Friendly)
     end
 
     -- Warband availability bonus: if current char is locked but alts are free,
@@ -207,6 +251,15 @@ function FB.Scoring:Score(input, weights)
         score = score * (1 - stalenessDiscount)
     end
 
+    -- "Completable today" bonus: guaranteed mounts nearly done get extra discount
+    -- S3: Mount at 99% completion (1 more quest) should surface above mount at 50%
+    local isDropMount = (dropChance and dropChance > 0 and dropChance < 1)
+    if not isDropMount and progressRemaining <= 0.05 and immediatelyAvailable then
+        -- Scale: 0% remaining = 20% discount, 5% remaining = 4% discount
+        local completionDiscount = 0.20 * (1 - (progressRemaining / 0.05))
+        score = score * (1 - completionDiscount)
+    end
+
     -- Guard against NaN in final score, floor at 0 for UI sanity
     if score ~= score then score = 99999 end
     score = math.max(0, score)
@@ -223,6 +276,8 @@ function FB.Scoring:Score(input, weights)
         warbandAvailable = warbandAvailable,
         instanceGroupCount = instanceGroupCount,
         staleDays = staleDays,
+        isUnknownDrop = isUnknownDrop,
+        hoursPerDay = hoursPerDay,
     })
 
     return {
@@ -235,9 +290,10 @@ function FB.Scoring:Score(input, weights)
             effort = effortScore,
         },
         effectiveDays = effectiveDays,
-        expectedAttempts = expectedAttempts,
+        expectedAttempts = expectedAttempts,  -- nil for unknown-drop mounts
         immediatelyAvailable = immediatelyAvailable,
         scoreExplanation = explanation,
+        isUnknownDrop = isUnknownDrop or false,
     }
 end
 
@@ -279,15 +335,24 @@ function FB.Scoring:BuildExplanation(input, data)
         parts[#parts + 1] = "yearly event only"
     end
 
+    -- FIX-3: Drop chance source transparency
     if input.dropChance then
         local pct = input.dropChance * 100
-        if pct >= 5 then
-            parts[#parts + 1] = string.format("%.0f%% drop", pct)
-        elseif pct >= 1 then
-            parts[#parts + 1] = string.format("%.1f%% drop", pct)
-        else
-            parts[#parts + 1] = string.format("%.2f%% drop", pct)
+        local sourceTag = ""
+        if input.dropChanceSource == "curated" then
+            sourceTag = " (verified)"
+        elseif input.dropChanceSource == "rarity_db" then
+            sourceTag = " (community data)"
         end
+        if pct >= 5 then
+            parts[#parts + 1] = string.format("%.0f%% drop%s", pct, sourceTag)
+        elseif pct >= 1 then
+            parts[#parts + 1] = string.format("%.1f%% drop%s", pct, sourceTag)
+        else
+            parts[#parts + 1] = string.format("%.2f%% drop%s", pct, sourceTag)
+        end
+    elseif data.isUnknownDrop then
+        parts[#parts + 1] = "drop rate unknown"
     end
 
     -- Availability
@@ -306,9 +371,23 @@ function FB.Scoring:BuildExplanation(input, data)
         parts[#parts + 1] = data.instanceGroupCount .. " mounts from same run"
     end
 
-    -- Estimated time
+    -- FIX-7: Estimated time — range for RNG, single for guaranteed
     if data.effectiveDays and data.effectiveDays < 99999 then
-        parts[#parts + 1] = "~" .. FB.Utils:FormatDays(data.effectiveDays)
+        local hoursPerDay = data.hoursPerDay or 2
+        if input.dropChance and input.dropChance > 0 and input.dropChance < 1 then
+            -- RNG mount: compute attempts per day from time gate
+            local gateDays = FB.TIME_GATE_FACTORS[input.timeGate or "none"] or 0
+            local attemptsPerDay = gateDays > 0 and (1 / gateDays) or
+                math.max(1, math.floor(hoursPerDay * 60 / math.max(1, input.timePerAttempt or 10)))
+            local rangeStr = FB.Utils:FormatDaysRange(input.dropChance, attemptsPerDay, hoursPerDay)
+            if rangeStr then
+                parts[#parts + 1] = rangeStr
+            else
+                parts[#parts + 1] = "~" .. FB.Utils:FormatDays(data.effectiveDays) .. " (at " .. hoursPerDay .. "h/day)"
+            end
+        else
+            parts[#parts + 1] = "~" .. FB.Utils:FormatDays(data.effectiveDays) .. " (at " .. hoursPerDay .. "h/day)"
+        end
     end
 
     -- Main bottleneck

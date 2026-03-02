@@ -1,7 +1,7 @@
 local addonName, FB = ...
 _G["FarmBuddy"] = FB
 
-FB.version = "1.2.0"
+FB.version = "1.3.0"
 FB.addonName = addonName
 
 -- Module namespaces (populated by later files)

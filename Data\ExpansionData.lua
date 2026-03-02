@@ -13,6 +13,7 @@ FB.ExpansionData = {
     SL      = { name = "Shadowlands",               order = 9  },
     DF      = { name = "Dragonflight",              order = 10 },
     TWW     = { name = "The War Within",            order = 11 },
+    MIDNIGHT = { name = "Midnight",               order = 12 },
 }
 
 -- Get expansion display name

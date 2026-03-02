@@ -134,3 +134,56 @@ FB:RegisterEvent("ENCOUNTER_END", FB, function(self, event, encounterID, encount
         end
     end)
 end)
+
+-- Mount collected: celebrate and update recommendations
+FB:RegisterEvent("NEW_MOUNT_ADDED", FB, function(self, event, mountID)
+    if not mountID then return end
+
+    local name = C_MountJournal and C_MountJournal.GetMountInfoByID and
+        select(1, C_MountJournal.GetMountInfoByID(mountID))
+
+    if name then
+        FB:Print(FB.COLORS.GREEN .. "Mount collected: " .. name .. "!|r")
+    end
+
+    -- Invalidate scan cache so next view shows updated results
+    if FB.db then
+        FB.db.cachedMountScores = nil
+    end
+
+    -- Record in session history if tracking
+    if FB.db and FB.db.sessionHistory then
+        local history = FB.db.sessionHistory
+        if #history > 0 then
+            local lastSession = history[#history]
+            if not lastSession.mountsObtained then
+                lastSession.mountsObtained = {}
+            end
+            lastSession.mountsObtained[#lastSession.mountsObtained + 1] = {
+                mountID = mountID,
+                name = name,
+                timestamp = time(),
+            }
+        end
+    end
+
+    -- Refresh tracker if visible
+    if FB.Tracker and FB.Tracker.Refresh then
+        C_Timer.After(0.5, function()
+            FB.Tracker:Refresh()
+        end)
+    end
+end)
+
+-- Zone change: could be useful for "while you're here" suggestions
+FB:RegisterEvent("ZONE_CHANGED_NEW_AREA", FB, function(self, event)
+    -- Placeholder for future "while you're here" feature
+    -- Currently just invalidates synergy cache when entering a new zone
+    if FB.SynergyResolver and FB.SynergyResolver.InvalidateCache then
+        -- Don't invalidate on every zone change, too expensive
+        -- Only invalidate if we enter an instance
+        if IsInInstance and IsInInstance() then
+            FB.SynergyResolver:InvalidateCache()
+        end
+    end
+end)

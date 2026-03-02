@@ -15,8 +15,13 @@ function FB.Profiler:Stop(name)
     local startTime = timers[name]
     if not startTime then return 0 end
 
+    local usingPreciseSec = not debugprofile and GetTimePreciseSec
     local endTime = debugprofile and debugprofile() or (GetTimePreciseSec and GetTimePreciseSec() or 0)
     local elapsed = endTime - startTime
+    -- debugprofile() returns milliseconds; GetTimePreciseSec() returns seconds — normalize to ms
+    if usingPreciseSec then
+        elapsed = elapsed * 1000
+    end
     timers[name] = nil
 
     -- Record stats

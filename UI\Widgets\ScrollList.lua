@@ -191,11 +191,22 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
 
                 row.rank:SetText(FB.COLORS.GRAY .. dataIdx .. "|r")
                 row.icon:SetTexture(item.icon)
-                row.nameText:SetText(item.name or "Unknown")
+                -- FIX-14: Prepend colored confidence bullet to mount names
+                local confBullet = ""
+                if item.confidence and FB.CONFIDENCE_COLORS then
+                    local bulletColor = FB.CONFIDENCE_COLORS[item.confidence] or ""
+                    if item.confidence == "low" then
+                        confBullet = bulletColor .. "! |r"
+                    elseif item.confidence == "medium" then
+                        confBullet = bulletColor .. "~ |r"
+                    end
+                    -- High confidence: no bullet (clean look)
+                end
+                row.nameText:SetText(confBullet .. (item.name or "Unknown"))
 
                 -- Sub text varies by context
                 local sourceLabel = FB.SOURCE_TYPE_NAMES[item.sourceType] or item.sourceType or ""
-                local expansionLabel = item.expansion and FB:GetExpansionName(item.expansion) or ""
+                local expansionLabel = item.expansion and (FB.EXPANSION_NAMES[item.expansion] or item.expansion) or ""
                 if expansionLabel ~= "" then
                     sourceLabel = sourceLabel .. " - " .. expansionLabel
                 end

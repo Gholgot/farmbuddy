@@ -11,6 +11,8 @@ local searchBox
 local scoreBar
 local allMountData = nil
 local selectedMount = nil
+local loadingLabel = nil
+local loadHandle = nil
 
 function FB.UI.MountSearchTab:Init(parentPanel)
     panel = parentPanel
@@ -210,10 +212,16 @@ function FB.UI.MountSearchTab:Init(parentPanel)
     self.detailScroll = detailScroll
     self.detailChild = detailChild
     self.detailScrollBar = detailScrollBar
+
+    -- Loading label shown during async mount data load
+    loadingLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    loadingLabel:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", 5, -10)
+    loadingLabel:SetTextColor(0.7, 0.7, 0.7)
+    loadingLabel:Hide()
 end
 
 function FB.UI.MountSearchTab:OnShow()
-    if not allMountData then
+    if not allMountData and not loadHandle then
         self:LoadAllMounts()
     end
 end
@@ -223,17 +231,27 @@ function FB.UI.MountSearchTab:LoadAllMounts()
     if not mountIDs then return end
 
     local weights = FB.Scoring:GetWeights()
+
+    -- Set immediately to prevent re-entry (async runs over multiple frames)
     allMountData = {}
 
-    for _, mountID in ipairs(mountIDs) do
-        local name, spellID, icon, isActive, isUsable, sourceType, isFavorite,
-              isFactionSpecific, faction, hideOnChar, isCollected =
-              C_MountJournal.GetMountInfoByID(mountID)
+    -- Show loading indicator
+    if loadingLabel then
+        loadingLabel:SetText("Loading mounts... 0 / " .. #mountIDs)
+        loadingLabel:Show()
+    end
 
-        -- Skip mounts hidden from this character (wrong faction, class-locked, etc.)
-        if hideOnChar then
-            -- don't add to allMountData at all
-        elseif name and spellID then
+    loadHandle = FB.Async:RunBatched(
+        mountIDs,
+        function(mountID)
+            local name, spellID, icon, isActive, isUsable, sourceType, isFavorite,
+                  isFactionSpecific, faction, hideOnChar, isCollected =
+                  C_MountJournal.GetMountInfoByID(mountID)
+
+            -- Skip mounts hidden from this character (wrong faction, class-locked, etc.)
+            if hideOnChar then return nil end
+            if not (name and spellID) then return nil end
+
             local creatureDisplayID, descriptionText, sourceText =
                   C_MountJournal.GetMountInfoExtraByID(mountID)
 
@@ -354,16 +372,29 @@ function FB.UI.MountSearchTab:LoadAllMounts()
                 }
             end
 
-            allMountData[#allMountData + 1] = entry
+            return entry
+        end,
+        "auto",
+        function(current, total)
+            if loadingLabel then
+                loadingLabel:SetText("Loading mounts... " .. current .. " / " .. total)
+            end
+        end,
+        function(results)
+            loadHandle = nil
+
+            -- Hide loading indicator
+            if loadingLabel then loadingLabel:Hide() end
+
+            -- Collect results and sort alphabetically
+            allMountData = results
+            table.sort(allMountData, function(a, b)
+                return (a.name or "") < (b.name or "")
+            end)
+
+            self:ApplyFilters()
         end
-    end
-
-    -- Sort alphabetically
-    table.sort(allMountData, function(a, b)
-        return a.name < b.name
-    end)
-
-    self:ApplyFilters()
+    )
 end
 
 function FB.UI.MountSearchTab:ApplyFilters()

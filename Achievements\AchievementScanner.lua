@@ -64,6 +64,7 @@ function FB.Achievements.Scanner:ScanCategory(categoryID, onProgress, onComplete
                 components = result.components,
                 effectiveDays = result.effectiveDays,
                 immediatelyAvailable = result.immediatelyAvailable,
+                scoreExplanation = result.scoreExplanation,
             }
         end,
         batchSize,
@@ -109,10 +110,32 @@ end
 -- Collect all achievement IDs from a category and its subcategories
 function FB.Achievements.Scanner:CollectAchievementIDs(categoryID)
     local ids = {}
-    local seen = {}  -- Deduplicate achievement IDs
+    local seen = {}
 
     -- Build the child map once at the top level
     local childMap = self:BuildCategoryChildMap()
+
+    -- Try modern API first: get ALL achievement IDs and filter by category
+    local useModernAPI = false
+    local categoryToAchievements = {}  -- catID -> { achID, ... }
+
+    if C_AchievementInfo and C_AchievementInfo.GetAchievementIDs then
+        local allOk, allIDs = pcall(C_AchievementInfo.GetAchievementIDs)
+        if allOk and allIDs and #allIDs > 0 then
+            useModernAPI = true
+            -- Build category lookup table once
+            for _, achID in ipairs(allIDs) do
+                local catOk, catIDForAch = pcall(GetAchievementCategory, achID)
+                if catOk and catIDForAch then
+                    if not categoryToAchievements[catIDForAch] then
+                        categoryToAchievements[catIDForAch] = {}
+                    end
+                    local t = categoryToAchievements[catIDForAch]
+                    t[#t + 1] = achID
+                end
+            end
+        end
+    end
 
     -- Recursive helper with cycle protection and depth limit
     local visitedCats = {}
@@ -120,39 +143,32 @@ function FB.Achievements.Scanner:CollectAchievementIDs(categoryID)
 
     local function collectRecursive(catID, depth)
         if not catID or depth > MAX_DEPTH then return end
-        if visitedCats[catID] then return end  -- Cycle protection
+        if visitedCats[catID] then return end
         visitedCats[catID] = true
 
-        -- Get achievements directly in this category
-        local numOk, numAchievements = pcall(GetCategoryNumAchievements, catID, false)
-        if not numOk then numAchievements = 0 end
-        numAchievements = numAchievements or 0
-
-        if numAchievements > 0 then
-            for i = 1, numAchievements do
-                local ok, achID = pcall(GetAchievementInfo, catID, i)
-                if ok and achID then
+        if useModernAPI then
+            -- Use pre-built category lookup
+            local achIDs = categoryToAchievements[catID]
+            if achIDs then
+                for _, achID in ipairs(achIDs) do
                     if not seen[achID] then
                         seen[achID] = true
                         ids[#ids + 1] = achID
                     end
                 end
             end
-        end
+        else
+            -- Fallback: two-arg GetAchievementInfo(catID, i)
+            local numOk, numAchievements = pcall(GetCategoryNumAchievements, catID, false)
+            if not numOk then numAchievements = 0 end
+            numAchievements = numAchievements or 0
 
-        -- If the two-arg form didn't work, try the C_AchievementInfo API
-        if #ids == 0 and numAchievements > 0 and depth == 0 then
-            if C_AchievementInfo and C_AchievementInfo.GetAchievementIDs then
-                local allOk, allIDs = pcall(C_AchievementInfo.GetAchievementIDs)
-                if allOk and allIDs then
-                    for _, achID in ipairs(allIDs) do
-                        local catOk, catIDForAch = pcall(GetAchievementCategory, achID)
-                        if catOk and catIDForAch == catID then
-                            if not seen[achID] then
-                                seen[achID] = true
-                                ids[#ids + 1] = achID
-                            end
-                        end
+            for i = 1, numAchievements do
+                local ok, achID = pcall(GetAchievementInfo, catID, i)
+                if ok and achID then
+                    if not seen[achID] then
+                        seen[achID] = true
+                        ids[#ids + 1] = achID
                     end
                 end
             end

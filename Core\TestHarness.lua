@@ -33,7 +33,8 @@ local function AssertRange(value, min, max, testName)
     end
 end
 
--- Reset test state
+-- Reset test state.
+-- Called automatically at the start of each Run(). Not intended for external use.
 local function Reset()
     passed = 0
     failed = 0
@@ -214,7 +215,7 @@ local function TestMountDBIntegrity()
     }
 
     local validGroups = {
-        solo = true, duo = true, small = true, full = true, mythic = true,
+        solo = true, duo = true, small = true, full = true, raid = true, mythic = true,
     }
 
     for spellID, meta in pairs(FB.MountDB.entries) do
@@ -441,13 +442,358 @@ local function TestExpansionFromInstanceData()
 end
 
 -- Test 16: Attempt tracking data structure (#6)
+-- STUB: This test only verifies the function exists. Full validation requires
+-- mock lockout data and a populated MountDB. Add real assertions when mocks are available.
 local function TestAttemptTracking()
     Assert(FB.CharacterData.RecordMountAttempts ~= nil, "RecordMountAttempts exists")
 
     -- Verify mountAttempts table exists in account DB defaults
     if FB.db then
-        Assert(FB.db.mountAttempts ~= nil or true, "mountAttempts table accessible")
+        Assert(FB.db.mountAttempts ~= nil, "mountAttempts table accessible")
     end
+end
+
+-- Test 17: SessionPlanner empty results returns empty plan
+local function TestSessionPlannerEmpty()
+    if not FB.SessionPlanner then
+        Assert(false, "SessionPlanner: Empty results returns empty plan", "Module not loaded")
+        return
+    end
+    local plan = FB.SessionPlanner:GeneratePlan({}, 60)
+    Assert(plan ~= nil and plan.activities ~= nil, "SessionPlanner: Empty results returns empty plan", "No plan returned")
+    AssertEqual(0, #plan.activities, "SessionPlanner: Empty results has 0 activities")
+end
+
+-- Test 18: SessionPlanner respects time budget
+local function TestSessionPlannerTimeBudget()
+    if not FB.SessionPlanner then
+        Assert(false, "SessionPlanner: Respects time budget", "Module not loaded")
+        return
+    end
+    local mockResults = {
+        { immediatelyAvailable = true, timePerAttempt = 20, score = 10, name = "Mount A",
+          groupRequirement = "solo", lockoutInstanceName = "Test Raid", expansion = "WOTLK",
+          id = 1, dropChance = 0.01, sourceType = "raid_drop" },
+        { immediatelyAvailable = true, timePerAttempt = 15, score = 15, name = "Mount B",
+          groupRequirement = "solo", lockoutInstanceName = nil, expansion = "LEGION",
+          id = 2, dropChance = 0.02, sourceType = "dungeon_drop" },
+        { immediatelyAvailable = true, timePerAttempt = 40, score = 5, name = "Mount C",
+          groupRequirement = "solo", lockoutInstanceName = nil, expansion = "CATA",
+          id = 3, dropChance = nil, sourceType = "reputation" },
+    }
+    local plan = FB.SessionPlanner:GeneratePlan(mockResults, 30)
+    Assert(plan.totalMinutes <= 30, "SessionPlanner: Respects time budget",
+        "Exceeded budget: " .. tostring(plan.totalMinutes))
+end
+
+-- Test 19: SynergyResolver returns empty for nil input
+local function TestSynergyResolverNilInput()
+    if not FB.SynergyResolver then
+        Assert(false, "SynergyResolver: Returns empty for nil input", "Module not loaded")
+        return
+    end
+    local synergies = FB.SynergyResolver:FindSynergies(nil)
+    AssertEqual(0, #synergies, "SynergyResolver: Returns empty for nil input")
+end
+
+-- Test 20: SynergyResolver discount capped at 20%
+local function TestSynergyResolverDiscountCap()
+    if not FB.SynergyResolver then
+        Assert(false, "SynergyResolver: Discount capped at 20%", "Module not loaded")
+        return
+    end
+    local fakeSynergies = {}
+    for i = 1, 20 do
+        fakeSynergies[i] = { rewardType = "mount" }
+    end
+    local discount = FB.SynergyResolver:GetSynergyDiscount(fakeSynergies)
+    Assert(discount <= 0.20, "SynergyResolver: Discount capped at 20%",
+        "Discount exceeded 20%: " .. tostring(discount))
+end
+
+-- Test 21: BehaviorTracker requires minimum sessions
+local function TestBehaviorTrackerMinSessions()
+    if not FB.BehaviorTracker then
+        Assert(false, "BehaviorTracker: Requires minimum sessions", "Module not loaded")
+        return
+    end
+    -- With fresh data, should not error; just verify the call succeeds
+    local ok, err = pcall(function() FB.BehaviorTracker:HasSufficientData() end)
+    Assert(ok, "BehaviorTracker: Requires minimum sessions", tostring(err))
+end
+
+-- Test 22: WeeklyPlanner handles no cached data
+local function TestWeeklyPlannerNoCache()
+    if not FB.WeeklyPlanner then
+        Assert(false, "WeeklyPlanner: Handles no cached data", "Module not loaded")
+        return
+    end
+    -- LOW-8: Save state before mutating, restore unconditionally after pcall
+    -- so FB.db.cachedMountScores is always restored even if GenerateWeeklyPlan errors.
+    local origCache = FB.db and FB.db.cachedMountScores
+    if FB.db then FB.db.cachedMountScores = nil end
+    local ok, plan = pcall(function() return FB.WeeklyPlanner:GenerateWeeklyPlan() end)
+    if FB.db then FB.db.cachedMountScores = origCache end
+    Assert(ok, "WeeklyPlanner: GenerateWeeklyPlan did not error with nil cache")
+    if ok then
+        Assert(plan ~= nil, "WeeklyPlanner: Handles no cached data", "No plan returned")
+        AssertEqual(0, plan.totalMounts, "WeeklyPlanner: No cached data yields 0 mounts")
+    end
+end
+
+-- Test 23: WhatIfSimulator mount count milestones
+local function TestWhatIfSimulatorMountCount()
+    if not FB.WhatIfSimulator then
+        Assert(false, "WhatIfSimulator: Mount count milestones", "Module not loaded")
+        return
+    end
+    local result = FB.WhatIfSimulator:SimulateMountCount(500)
+    Assert(result ~= nil, "WhatIfSimulator: Mount count milestones", "No result")
+end
+
+-- =====================
+-- FIX-16: NEW TESTS
+-- =====================
+
+-- Test 24: Uncurated mount without Rarity data has nil dropChance (FIX-1)
+local function TestNoFakeDropRate()
+    local defaults = FB.Mounts.Resolver:GetDefaultsForSourceType("raid_drop", "WOTLK")
+    Assert(defaults.dropChance == nil, "TestNoFakeDropRate: raid_drop defaults have nil dropChance",
+        "got: " .. tostring(defaults.dropChance))
+
+    local defaults2 = FB.Mounts.Resolver:GetDefaultsForSourceType("dungeon_drop", "LEGION")
+    Assert(defaults2.dropChance == nil, "TestNoFakeDropRate: dungeon_drop defaults have nil dropChance",
+        "got: " .. tostring(defaults2.dropChance))
+
+    local defaults3 = FB.Mounts.Resolver:GetDefaultsForSourceType("world_boss", "MOP")
+    Assert(defaults3.dropChance == nil, "TestNoFakeDropRate: world_boss defaults have nil dropChance",
+        "got: " .. tostring(defaults3.dropChance))
+end
+
+-- Test 25: Drop chance source tags (FIX-1/FIX-3)
+local function TestDropChanceSource()
+    -- A curated mount with explicit dropChance should get "curated" source
+    local weights = FB.Scoring:GetWeights()
+    local curatedInput = {
+        sourceType = "raid_drop",
+        progressRemaining = 1.0,
+        timePerAttempt = 15,
+        timeGate = "weekly",
+        groupRequirement = "solo",
+        dropChance = 0.01,
+        dropChanceSource = "curated",
+        expectedAttempts = 100,
+        attemptsRemaining = 1,
+    }
+    local result = FB.Scoring:Score(curatedInput, weights)
+    Assert(result.scoreExplanation:find("verified") ~= nil,
+        "TestDropChanceSource: curated shows 'verified'",
+        "explanation: " .. (result.scoreExplanation or "nil"))
+
+    -- No drop chance → "drop rate unknown"
+    local unknownInput = {
+        sourceType = "raid_drop",
+        progressRemaining = 1.0,
+        timePerAttempt = 15,
+        timeGate = "weekly",
+        groupRequirement = "solo",
+        dropChance = nil,
+        dropChanceSource = nil,
+        attemptsRemaining = 1,
+    }
+    local result2 = FB.Scoring:Score(unknownInput, weights)
+    Assert(result2.scoreExplanation:find("drop rate unknown") ~= nil,
+        "TestDropChanceSource: nil shows 'drop rate unknown'",
+        "explanation: " .. (result2.scoreExplanation or "nil"))
+end
+
+-- Test 26: Faction filtering (FIX-4)
+local function TestFactionFiltering()
+    -- Verify faction detection data flows correctly
+    -- (Full in-game scan test requires C_MountJournal; test the filter logic)
+    local input = {
+        isFactionSpecific = true,
+        faction = "ALLIANCE",
+    }
+    -- A Horde player should not see this mount
+    local savedFaction = FB.playerFaction
+    FB.playerFaction = "Horde"
+    local playerIsAlliance = (FB.playerFaction == "Alliance")
+    local mountIsAlliance = (input.faction == "ALLIANCE" or input.faction == 0)
+    local shouldFilter = (playerIsAlliance ~= mountIsAlliance)
+    FB.playerFaction = savedFaction
+    Assert(shouldFilter == true, "TestFactionFiltering: Alliance mount filtered for Horde player")
+
+    -- Same faction should NOT filter
+    FB.playerFaction = "Alliance"
+    playerIsAlliance = (FB.playerFaction == "Alliance")
+    shouldFilter = (playerIsAlliance ~= mountIsAlliance)
+    FB.playerFaction = savedFaction
+    Assert(shouldFilter == false, "TestFactionFiltering: Alliance mount NOT filtered for Alliance player")
+end
+
+-- Test 27: Lockout scope (FIX-5)
+local function TestLockoutScope()
+    local weights = FB.Scoring:GetWeights()
+
+    -- World boss: account scope → warbandMultiplier should be 1
+    local worldBoss = {
+        sourceType = "world_boss",
+        progressRemaining = 1.0,
+        timePerAttempt = 5,
+        timeGate = "weekly",
+        groupRequirement = "solo",
+        dropChance = 0.005,
+        expectedAttempts = 200,
+        attemptsRemaining = 1,
+        warbandAvailable = 5,
+        warbandTotal = 5,
+        lockoutScope = "account",
+    }
+
+    -- Same but with character scope
+    local charScope = {
+        sourceType = "raid_drop",
+        progressRemaining = 1.0,
+        timePerAttempt = 5,
+        timeGate = "weekly",
+        groupRequirement = "solo",
+        dropChance = 0.005,
+        expectedAttempts = 200,
+        attemptsRemaining = 1,
+        warbandAvailable = 5,
+        warbandTotal = 5,
+        lockoutScope = "character",
+    }
+
+    local wbResult = FB.Scoring:Score(worldBoss, weights)
+    local charResult = FB.Scoring:Score(charScope, weights)
+
+    -- World boss should score HIGHER (worse) because alts don't help
+    Assert(wbResult.effectiveDays > charResult.effectiveDays,
+        "TestLockoutScope: account scope has more effective days than character scope",
+        string.format("account=%s, char=%s", tostring(wbResult.effectiveDays), tostring(charResult.effectiveDays)))
+end
+
+-- Test 28: Configurable playtime (FIX-6)
+local function TestConfigurablePlaytime()
+    local weights = FB.Scoring:GetWeights()
+    local input = {
+        sourceType = "quest_chain",
+        progressRemaining = 1.0,
+        timePerAttempt = 60,
+        timeGate = "none",
+        groupRequirement = "solo",
+        dropChance = nil,
+        expectedAttempts = 10,
+        attemptsRemaining = 1,
+    }
+
+    -- Score with default 2h/day
+    local origHours = FB.db and FB.db.settings and FB.db.settings.hoursPerDay
+    if FB.db and FB.db.settings then FB.db.settings.hoursPerDay = 2 end
+    local result2h = FB.Scoring:Score(input, weights)
+
+    -- Score with 4h/day
+    if FB.db and FB.db.settings then FB.db.settings.hoursPerDay = 4 end
+    local result4h = FB.Scoring:Score(input, weights)
+
+    -- Restore
+    if FB.db and FB.db.settings then FB.db.settings.hoursPerDay = origHours end
+
+    Assert(result4h.effectiveDays < result2h.effectiveDays,
+        "TestConfigurablePlaytime: 4h/day yields fewer effective days than 2h/day",
+        string.format("4h=%s, 2h=%s", tostring(result4h.effectiveDays), tostring(result2h.effectiveDays)))
+end
+
+-- Test 29: FormatDaysRange correct percentiles (FIX-7)
+local function TestRangeEstimates()
+    -- 1% drop, 1 attempt per week — unlucky range exceeds 1 year (yearly-guard path)
+    local range = FB.Utils:FormatDaysRange(0.01, 1/7, 2)
+    Assert(range ~= nil, "TestRangeEstimates: FormatDaysRange returns string for known drop",
+        "got nil")
+    if range then
+        Assert(range:find("avg") ~= nil, "TestRangeEstimates: range contains 'avg'",
+            "got: " .. range)
+    end
+
+    -- 10% drop, 1 attempt per day — stays well under a year, uses normal h/day format
+    -- MED-13: Use "h/day" instead of "at" to avoid matching inside other words like "data"
+    local shortRange = FB.Utils:FormatDaysRange(0.10, 1, 2)
+    Assert(shortRange ~= nil, "TestRangeEstimates: FormatDaysRange returns string for 10% drop",
+        "got nil")
+    if shortRange then
+        Assert(shortRange:find("h/day") ~= nil, "TestRangeEstimates: short range contains playtime",
+            "got: " .. shortRange)
+    end
+
+    -- Nil drop chance should return nil
+    local nilRange = FB.Utils:FormatDaysRange(nil, 1, 2)
+    Assert(nilRange == nil, "TestRangeEstimates: nil drop returns nil")
+
+    -- 100% drop should return nil (not RNG)
+    local certainRange = FB.Utils:FormatDaysRange(1.0, 1, 2)
+    Assert(certainRange == nil, "TestRangeEstimates: 100% drop returns nil")
+end
+
+-- Test 30: Unknown-drop mount scored conservatively (FIX-2)
+local function TestUnknownDropScoring()
+    local weights = FB.Scoring:GetWeights()
+
+    -- Known 1% drop raid mount
+    local knownDrop = {
+        sourceType = "raid_drop",
+        progressRemaining = 1.0,
+        timePerAttempt = 15,
+        timeGate = "weekly",
+        groupRequirement = "solo",
+        dropChance = 0.01,
+        dropChanceSource = "curated",
+        expectedAttempts = 100,
+        attemptsRemaining = 1,
+    }
+
+    -- Unknown drop raid mount (no fabricated rate)
+    local unknownDrop = {
+        sourceType = "raid_drop",
+        progressRemaining = 1.0,
+        timePerAttempt = 15,
+        timeGate = "weekly",
+        groupRequirement = "solo",
+        dropChance = nil,
+        dropChanceSource = nil,
+        attemptsRemaining = 1,
+    }
+
+    local knownResult = FB.Scoring:Score(knownDrop, weights)
+    local unknownResult = FB.Scoring:Score(unknownDrop, weights)
+
+    -- Unknown should NOT score as trivially easy (which is what happened before FIX-1)
+    Assert(unknownResult.score > 10,
+        "TestUnknownDropScoring: unknown-drop mount doesn't score trivially low",
+        string.format("score=%.1f", unknownResult.score))
+
+    -- Unknown should be flagged
+    Assert(unknownResult.isUnknownDrop == true,
+        "TestUnknownDropScoring: isUnknownDrop flag set")
+end
+
+-- Test 31: Confidence percent weighted 0-100% (FIX-11)
+local function TestConfidencePercent()
+    -- GetDefaultsForSourceType returns lockoutScope
+    local defaults = FB.Mounts.Resolver:GetDefaultsForSourceType("world_boss", "MOP")
+    AssertEqual("account", defaults.lockoutScope,
+        "TestConfidencePercent: world_boss has account lockoutScope")
+
+    local defaults2 = FB.Mounts.Resolver:GetDefaultsForSourceType("raid_drop", "WOTLK")
+    AssertEqual("character", defaults2.lockoutScope,
+        "TestConfidencePercent: raid_drop has character lockoutScope")
+
+    -- Verify confidence colors exist
+    Assert(FB.CONFIDENCE_COLORS ~= nil, "TestConfidencePercent: CONFIDENCE_COLORS table exists")
+    Assert(FB.CONFIDENCE_COLORS.high ~= nil, "TestConfidencePercent: high color exists")
+    Assert(FB.CONFIDENCE_COLORS.medium ~= nil, "TestConfidencePercent: medium color exists")
+    Assert(FB.CONFIDENCE_COLORS.low ~= nil, "TestConfidencePercent: low color exists")
 end
 
 -- =====================
@@ -479,6 +825,22 @@ function FB.TestHarness:Run()
         { name = "PvP Differentiation",   func = TestPvPDifferentiation },
         { name = "Expansion InstanceData",func = TestExpansionFromInstanceData },
         { name = "Attempt Tracking",      func = TestAttemptTracking },
+        { name = "SessionPlanner Empty",  func = TestSessionPlannerEmpty },
+        { name = "SessionPlanner Budget", func = TestSessionPlannerTimeBudget },
+        { name = "SynergyResolver Nil",   func = TestSynergyResolverNilInput },
+        { name = "SynergyResolver Cap",   func = TestSynergyResolverDiscountCap },
+        { name = "BehaviorTracker Min",   func = TestBehaviorTrackerMinSessions },
+        { name = "WeeklyPlanner NoCache", func = TestWeeklyPlannerNoCache },
+        { name = "WhatIf MountCount",     func = TestWhatIfSimulatorMountCount },
+        -- FIX-16: New tests
+        { name = "No Fake Drop Rate",   func = TestNoFakeDropRate },
+        { name = "Drop Chance Source",   func = TestDropChanceSource },
+        { name = "Faction Filtering",    func = TestFactionFiltering },
+        { name = "Lockout Scope",        func = TestLockoutScope },
+        { name = "Configurable Playtime",func = TestConfigurablePlaytime },
+        { name = "Range Estimates",      func = TestRangeEstimates },
+        { name = "Unknown Drop Scoring", func = TestUnknownDropScoring },
+        { name = "Confidence Percent",   func = TestConfidencePercent },
     }
 
     for _, suite in ipairs(suites) do

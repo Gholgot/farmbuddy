@@ -1,5 +1,7 @@
 local addonName, FB = ...
 
+-- NOTE: Localization stubs. These are not yet wired to UI code. All UI strings are currently hardcoded.
+
 -- Localization framework
 -- Usage: FB.L["string"] or FB:L("string")
 -- Falls back to the key itself if no translation found

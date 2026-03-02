@@ -137,6 +137,11 @@ function FB.Mounts.Resolver:ParseReputationFromText(sourceText)
     return nil, nil, nil
 end
 
+-- Forward declaration: defined fully after the currency cache block below.
+-- Referenced inside ParseCurrencyFromText to lazily extend the name→ID cache
+-- whenever a currency ID is discovered from a WoW hyperlink at runtime.
+local CacheCurrencyIDLazy
+
 --[[
     Parse currency requirement from mount sourceText.
 
@@ -173,6 +178,8 @@ function FB.Mounts.Resolver:ParseCurrencyFromText(sourceText)
                     cName = info.name
                 end
             end
+            -- Lazily extend the currency name cache with this hyperlink-discovered ID
+            CacheCurrencyIDLazy(cid)
             return cName or ("Currency " .. cid), amount or 0, cid
         end
     end
@@ -206,6 +213,8 @@ function FB.Mounts.Resolver:ParseCurrencyFromText(sourceText)
                     cName = info.name
                 end
             end
+            -- Lazily extend the currency name cache with this hyperlink-discovered ID
+            CacheCurrencyIDLazy(cid)
             return cName or ("Currency " .. cid), amount or 0, cid
         end
     end
@@ -251,10 +260,78 @@ function FB.Mounts.Resolver:ParseCurrencyFromText(sourceText)
     return nil, nil, nil
 end
 
--- Cached currency name → ID lookup (built once per session, lazy)
+-- CRIT-1 FIX: Lazy per-ID currency cache — no up-front bulk scan.
+-- Keys are lowercase currency names, values are currency IDs.
+-- Individual IDs are looked up on first access only.
 local currencyNameCache = nil
 
--- Build comprehensive currency name → ID cache by scanning known currency ID ranges
+-- Known currency IDs used for mount purchases across all expansions.
+-- Sourced from MountDB entries (currencyID fields) and well-known vendor currencies.
+-- Only these IDs are pre-populated; any ID found via hyperlink parsing is also cached
+-- lazily when first encountered.
+local KNOWN_MOUNT_CURRENCY_IDS = {
+    -- ===== Curated MountDB entries =====
+    824,    -- Timewarped Badge (used in MountDB currencyID = 824)
+
+    -- ===== Common mount-purchase currencies (all expansions) =====
+    -- Classic / TBC
+    515,    -- Justice Points (legacy)
+    614,    -- Valor Points (Cata legacy)
+    -- Wrath of the Lich King
+    -- (Marks of the Tribunal, etc. — no longer exist as currencies)
+    -- Cataclysm
+    -- MoP
+    697,    -- Valor Points (MoP)
+    -- WoD
+    823,    -- Timewarped Badge (alternate ID seen in some sources)
+    -- Legion
+    1166,   -- Order Hall Resources
+    1220,   -- Nethershard
+    -- BFA
+    1580,   -- War Resources
+    1718,   -- Seafarer's Dubloon
+    1755,   -- Prismatic Manapearl
+    -- Shadowlands
+    1767,   -- Soul Ash
+    1835,   -- Stygia
+    1884,   -- Cataloged Research
+    1906,   -- Stygian Ember
+    1979,   -- Soul Cinders
+    1987,   -- Cosmic Flux
+    -- Dragonflight
+    2003,   -- Dragon Isles Supplies
+    2032,   -- Elemental Overflow
+    2042,   -- Flightstones
+    2122,   -- Aspects' Token of Merit
+    2123,   -- Whelpling's Shadowflame Crest Fragment
+    -- The War Within
+    2778,   -- Resonance Crystals
+    2815,   -- Valorstones
+    -- PvP currencies (all eras — mounts sold for honor/conquest)
+    1792,   -- Honor (modern)
+    1602,   -- Conquest (modern)
+    -- Event / seasonal currencies
+    -- (Timewarped Badges cover most; holiday-specific ones below)
+    -- Brewfest tokens, Darkmoon tickets, etc. rarely gate mounts,
+    -- but include the main ones:
+    384,    -- Darkmoon Prize Ticket
+    402,    -- Champion's Seal
+    -- Garrison Resources (WoD)
+    824,    -- Timewarped Badge (already listed; kept for clarity)
+    -- Trading Post
+    2032,   -- Trader's Tender (DF Trading Post — same ID range)
+}
+
+-- Deduplicate the known list into a set for fast membership checks
+local KNOWN_CURRENCY_ID_SET = {}
+do
+    for _, cid in ipairs(KNOWN_MOUNT_CURRENCY_IDS) do
+        KNOWN_CURRENCY_ID_SET[cid] = true
+    end
+end
+
+-- Build cache from the known currency ID list only.
+-- No broad scan — only look up IDs we know are relevant.
 local function BuildCurrencyNameCache()
     if currencyNameCache then return currencyNameCache end
     currencyNameCache = {}
@@ -263,9 +340,7 @@ local function BuildCurrencyNameCache()
         return currencyNameCache
     end
 
-    -- WoW currency IDs range roughly from 1 to ~3000
-    -- Scan broadly to catch all currencies
-    for cid = 1, 3000 do
+    for cid in pairs(KNOWN_CURRENCY_ID_SET) do
         local ok, info = pcall(C_CurrencyInfo.GetCurrencyInfo, cid)
         if ok and info and info.name and info.name ~= "" then
             currencyNameCache[info.name:lower()] = cid
@@ -273,6 +348,18 @@ local function BuildCurrencyNameCache()
     end
 
     return currencyNameCache
+end
+
+-- Lazily cache a single currency ID by name (called when a hyperlink gives us an ID
+-- we haven't seen before, so future name searches find it without a full rescan).
+-- Note: forward-declared above ParseCurrencyFromText so it is in scope there.
+CacheCurrencyIDLazy = function(cid)
+    if not currencyNameCache then return end  -- Cache not yet built; will be populated on build
+    if not (C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo) then return end
+    local ok, info = pcall(C_CurrencyInfo.GetCurrencyInfo, cid)
+    if ok and info and info.name and info.name ~= "" then
+        currencyNameCache[info.name:lower()] = cid
+    end
 end
 
 --[[
@@ -317,8 +404,41 @@ end
     @param sourceText  string  - Blizzard's source text for the mount
     @return achievementID (number) or nil
 --]]
--- Cached achievement name → ID map (built once, lazy)
+-- CRIT-2 FIX: Achievement cache built from known IDs only — no broad range scan.
+-- Sources: AchievementDB.overrides keys + AchievementDB.knownRewards keys.
+-- These ~40 IDs cover every mount-rewarding achievement tracked by the addon.
+-- If new achievements are added to AchievementDB, they are automatically included here.
 local achievementNameCache = nil
+
+-- Union of all achievement IDs referenced in AchievementDB (overrides + knownRewards).
+-- This list is the single source of truth for which achievements we care about.
+-- Populated at runtime from FB.AchievementDB tables to stay in sync automatically.
+local function GetKnownAchievementIDs()
+    local ids = {}
+    local seen = {}
+
+    -- Pull from overrides table (per-achievement scoring customizations)
+    if FB.AchievementDB and FB.AchievementDB.overrides then
+        for aid in pairs(FB.AchievementDB.overrides) do
+            if not seen[aid] then
+                seen[aid] = true
+                ids[#ids + 1] = aid
+            end
+        end
+    end
+
+    -- Pull from knownRewards table (achievements with known mount/title/pet rewards)
+    if FB.AchievementDB and FB.AchievementDB.knownRewards then
+        for aid in pairs(FB.AchievementDB.knownRewards) do
+            if not seen[aid] then
+                seen[aid] = true
+                ids[#ids + 1] = aid
+            end
+        end
+    end
+
+    return ids
+end
 
 local function BuildAchievementNameCache()
     if achievementNameCache then return achievementNameCache end
@@ -326,23 +446,12 @@ local function BuildAchievementNameCache()
 
     if not GetAchievementInfo then return achievementNameCache end
 
-    -- Achievement IDs span a very wide range. Focus on categories most likely
-    -- to reward mounts: raid meta-achievements, dungeon meta-achievements, etc.
-    -- Scan ranges where mount-rewarding achievements are concentrated.
-    local ACHIEVEMENT_RANGES = {
-        { 1, 2000 },      -- Classic through WotLK (Glory of the Raider, etc.)
-        { 4500, 7500 },   -- Cata through MoP
-        { 8000, 12000 },  -- WoD through Legion
-        { 12000, 16000 }, -- BFA through Shadowlands
-        { 16000, 22000 }, -- Dragonflight through TWW
-    }
-
-    for _, range in ipairs(ACHIEVEMENT_RANGES) do
-        for aid = range[1], range[2] do
-            local ok, name = pcall(GetAchievementInfo, aid)
-            if ok and name and name ~= "" then
-                achievementNameCache[name:lower()] = aid
-            end
+    -- Only look up IDs that are actually referenced in AchievementDB.
+    -- Avoids scanning ~28,000 IDs across five ranges.
+    for _, aid in ipairs(GetKnownAchievementIDs()) do
+        local ok, name = pcall(GetAchievementInfo, aid)
+        if ok and name and name ~= "" then
+            achievementNameCache[name:lower()] = aid
         end
     end
 
@@ -386,18 +495,7 @@ end
 
 -- Faction name → ID caches (built once per session, lazy)
 local playerFactionCache = nil   -- From player's known faction list (fast, incomplete)
-local globalFactionCache = nil   -- From brute-force ID scan (slow, comprehensive)
-
--- Known WoW faction ID ranges to scan. Covers all expansions through TWW.
--- Faction IDs are not contiguous; we scan broad ranges and skip gaps.
-local FACTION_ID_RANGES = {
-    { 1,    800  },   -- Classic / TBC factions
-    { 900,  1200 },   -- WotLK / Cata factions
-    { 1200, 1600 },   -- MoP / WoD factions
-    { 1700, 2200 },   -- Legion / BFA factions
-    { 2300, 2600 },   -- Shadowlands factions
-    { 2600, 2950 },   -- Dragonflight / TWW factions
-}
+local globalFactionCache = nil   -- From ReputationData known IDs (targeted, no range scan)
 
 -- Build cache from player's discovered factions (fast — only factions visible in rep panel)
 local function BuildPlayerFactionCache()
@@ -437,32 +535,43 @@ local function BuildPlayerFactionCache()
     return playerFactionCache
 end
 
--- Build comprehensive cache by scanning all known faction ID ranges (slow, thorough)
--- Uses C_Reputation.GetFactionDataByID which works for ANY faction, even undiscovered ones
+-- MED-15 FIX: Build faction cache from ReputationData known IDs only.
+-- ReputationData covers ~80 factions that gate mount purchases across all expansions.
+-- No broad range scan needed — we know exactly which faction IDs matter.
 local function BuildGlobalFactionCache()
     if globalFactionCache then return globalFactionCache end
     globalFactionCache = {}
 
-    if not (C_Reputation and C_Reputation.GetFactionDataByID) then
-        -- Modern API not available, try legacy GetFactionInfoByID as fallback
-        if GetFactionInfoByID then
-            for _, range in ipairs(FACTION_ID_RANGES) do
-                for fid = range[1], range[2] do
-                    local ok, name = pcall(GetFactionInfoByID, fid)
-                    if ok and name and name ~= "" then
-                        globalFactionCache[name:lower()] = fid
-                    end
+    -- First: use the curated name values directly from ReputationData.
+    -- These are confirmed correct and require no API call for the name itself.
+    if FB.ReputationData then
+        for fid, data in pairs(FB.ReputationData) do
+            if data.name and data.name ~= "" then
+                globalFactionCache[data.name:lower()] = fid
+            end
+        end
+    end
+
+    -- Second: confirm/supplement via API for any faction whose in-game name may
+    -- differ from the curated name (e.g. localization differences).
+    -- Only queries the ~80 known IDs — not thousands of unknown ones.
+    if C_Reputation and C_Reputation.GetFactionDataByID then
+        if FB.ReputationData then
+            for fid in pairs(FB.ReputationData) do
+                local ok, data = pcall(C_Reputation.GetFactionDataByID, fid)
+                if ok and data and data.name and data.name ~= "" then
+                    globalFactionCache[data.name:lower()] = fid
                 end
             end
         end
-        return globalFactionCache
-    end
-
-    for _, range in ipairs(FACTION_ID_RANGES) do
-        for fid = range[1], range[2] do
-            local ok, data = pcall(C_Reputation.GetFactionDataByID, fid)
-            if ok and data and data.name and data.name ~= "" then
-                globalFactionCache[data.name:lower()] = fid
+    elseif GetFactionInfoByID then
+        -- Legacy API fallback: same targeted approach, no range scan
+        if FB.ReputationData then
+            for fid in pairs(FB.ReputationData) do
+                local ok, name = pcall(GetFactionInfoByID, fid)
+                if ok and name and name ~= "" then
+                    globalFactionCache[name:lower()] = fid
+                end
             end
         end
     end
@@ -745,6 +854,84 @@ function FB.Mounts.Resolver:EnrichFromSourceText(input, sourceText, skipTypes)
         input.progressRemaining = worstProgress
     end
 
+    -- FIX-8C: Precise rep/renown time estimation using curated daily rates
+    -- Replace hardcoded "30 dailies for any rep" with data-driven calculations
+    if input.factionID and progressValues.rep and progressValues.rep > 0.01 then
+        local repData = FB.ReputationData and FB.ReputationData[input.factionID]
+        local repRemaining, renownRemaining = FB.ProgressResolver:GetRepPointsRemaining(
+            input.factionID, input.targetStanding, input.targetRenown
+        )
+
+        if repData then
+            local repDays
+            if repData.method == "renown" and renownRemaining then
+                local weeks = math.ceil(renownRemaining / math.max(1, repData.weeklyRep))
+                repDays = weeks * 7
+            elseif repData.method == "tabard" and repRemaining then
+                repDays = math.ceil(repRemaining / math.max(1, repData.dailyRep))
+            elseif repRemaining then
+                local effectiveDaily = repData.dailyRep + (repData.weeklyRep / 7)
+                repDays = math.ceil(repRemaining / math.max(1, effectiveDaily))
+            end
+
+            if repDays then
+                input.repEstimatedDays = repDays
+                input.repMethod = repData.method
+                input.expectedAttempts = repDays  -- 1 "attempt" = 1 day of rep farming
+            end
+        else
+            -- Fallback: scale by expansion age
+            local EXPANSION_INDEX = {
+                CLASSIC = 0, TBC = 1, WOTLK = 2, CATA = 3, MOP = 4,
+                WOD = 5, LEGION = 6, BFA = 7, SL = 8, DF = 9, TWW = 10, MIDNIGHT = 11,
+            }
+            local idx = input.expansion and EXPANSION_INDEX[input.expansion]
+            local age = idx and (11 - idx) or nil
+            if age and age >= 6 then
+                input.expectedAttempts = 10   -- Ancient rep: tabard farmable, fast
+            elseif age and age >= 3 then
+                input.expectedAttempts = 20   -- Old rep: daily quests
+            elseif age and age >= 1 then
+                input.expectedAttempts = 30   -- Recent rep: mixed sources
+            else
+                input.expectedAttempts = 40   -- Current rep: weekly-capped renown
+            end
+        end
+    end
+
+    -- S8: Multi-requirement effort stacking
+    -- Sum additional effort from each incomplete prerequisite type
+    -- FIX-8C: Overlap detection — when rep and currency share the same faction/content, take max not sum
+    local extraAttempts = 0
+    local incompleteCount = 0
+    local repDays = input.repEstimatedDays or 0
+    for reqType, prog in pairs(progressValues) do
+        if prog and prog > 0.01 then
+            incompleteCount = incompleteCount + 1
+            if incompleteCount > 1 then
+                if reqType == "rep" then
+                    -- Already computed above via FIX-8C
+                    extraAttempts = math.max(extraAttempts, repDays)
+                elseif reqType == "currency" then
+                    -- Check overlap: if currency is from same faction, take max instead of sum
+                    local currDays = math.ceil(prog * 10)
+                    if input.factionID and repDays > 0 then
+                        extraAttempts = math.max(extraAttempts, currDays)
+                    else
+                        extraAttempts = extraAttempts + currDays
+                    end
+                elseif reqType == "achievement" then
+                    extraAttempts = extraAttempts + math.ceil(prog * 10)
+                else
+                    extraAttempts = extraAttempts + math.ceil(prog * 5)
+                end
+            end
+        end
+    end
+    if extraAttempts > 0 then
+        input.expectedAttempts = (input.expectedAttempts or 1) + extraAttempts
+    end
+
     return progressValues
 end
 
@@ -803,6 +990,8 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
         input.timeGate = meta.timeGate or "none"
         input.groupRequirement = meta.groupRequirement or "solo"
         input.dropChance = meta.dropChance
+        input.dropChanceSource = meta.dropChance and "curated" or nil
+        input.lockoutScope = meta.lockoutScope or "character"
         input.steps = meta.steps
 
         -- Pass through reputation/currency metadata for display
@@ -871,6 +1060,9 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
         end
 
         input.hasCuratedData = true
+        -- FIX-11: Curated data always gets 100% confidence
+        input.confidencePercent = 100
+        input.confidence = "high"
     else
         -- No curated data - use Blizzard's sourceType enum + sourceText for better guesses
         local guessedType = self:ResolveSourceType(sourceType, sourceText)
@@ -884,24 +1076,73 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
 
         -- Assign reasonable defaults based on guessed source type and expansion age
         local defaults = self:GetDefaultsForSourceType(guessedType, input.expansion)
+
+        -- S4: Use InstanceData for more accurate time estimates when available
+        if sourceText and (guessedType == "raid_drop" or guessedType == "dungeon_drop") then
+            local lowerSource = sourceText:lower()
+            for instName, instData in pairs(FB.InstanceData.instances) do
+                if lowerSource:find(instName:lower(), 1, true) then
+                    defaults.timePerAttempt = instData.soloMinutes
+                    -- Also infer lockout instance name for staleness tracking
+                    input.lockoutInstanceName = instName
+                    break
+                end
+            end
+        end
+
         input.timePerAttempt = defaults.timePerAttempt
         input.timeGate = defaults.timeGate
         input.groupRequirement = defaults.groupRequirement
+        input.lockoutScope = defaults.lockoutScope or "character"
         input.progressRemaining = 1.0
         input.attemptsRemaining = 1
         input.expectedAttempts = defaults.expectedAttempts
         input.hasCuratedData = false
 
-        -- Drop chance fallback chain (#5):
-        -- 1. Generated DB (scraped from data mining) > 2. Defaults
+        -- FIX-1: Drop chance only from verified sources, never fabricated defaults
+        -- 1. Generated DB (Rarity addon data) — community-sourced drop rates
         if generatedMeta and generatedMeta.dropChance then
             input.dropChance = generatedMeta.dropChance
-            -- Also recalculate expected attempts from actual drop chance
+            input.dropChanceSource = "rarity_db"
             if input.dropChance > 0 then
                 input.expectedAttempts = math.ceil(1 / input.dropChance)
             end
         else
-            input.dropChance = defaults.dropChance
+            -- No data = unknown drop rate (nil), NOT a fabricated 1%
+            input.dropChance = nil
+            input.dropChanceSource = nil
+        end
+
+        -- FIX-11: Weighted confidence scoring (0-100%)
+        local confPoints = 0
+        local dataQuality = {}
+        if input.dropChance then
+            confPoints = confPoints + 25
+            dataQuality[#dataQuality + 1] = "drop rate"
+        end
+        if input.lockoutInstanceName then
+            confPoints = confPoints + 20
+            dataQuality[#dataQuality + 1] = "instance"
+        end
+        if input.expansion then
+            confPoints = confPoints + 15
+            dataQuality[#dataQuality + 1] = "expansion"
+        end
+        if input.timePerAttempt and input.timePerAttempt ~= (defaults.timePerAttempt or 10) then
+            confPoints = confPoints + 10
+            dataQuality[#dataQuality + 1] = "clear time"
+        end
+        if input.timeGate then confPoints = confPoints + 10 end
+        if input.groupRequirement then confPoints = confPoints + 10 end
+        if generatedMeta then confPoints = confPoints + 10 end
+        input.confidencePercent = math.min(100, confPoints)
+        input.dataQuality = dataQuality
+        if confPoints >= 70 then
+            input.confidence = "high"
+        elseif confPoints >= 40 then
+            input.confidence = "medium"
+        else
+            input.confidence = "low"
         end
 
         -- PvP mount differentiation (#9): detect Gladiator vs Vicious vs rated
@@ -929,13 +1170,19 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
         end
 
         -- Recalculate expected attempts based on actual progress
+        -- For drop types without known drop rates, expectedAttempts stays nil (unknown)
         if input.progressRemaining then
             if input.progressRemaining <= 0 then
                 input.expectedAttempts = 1
-            else
+            elseif input.dropChance and input.dropChance > 0 then
+                -- Drop chance known: derive from probability
+                input.expectedAttempts = math.ceil(1 / input.dropChance)
+            elseif defaults.expectedAttempts then
+                -- Non-drop type with default attempts (rep, currency, etc.)
                 input.expectedAttempts = math.max(1,
                     math.ceil(input.progressRemaining * defaults.expectedAttempts))
             end
+            -- else: drop type with no known rate — expectedAttempts stays nil
         end
 
         -- Estimate gold farming effort for vendor mounts with gold cost
@@ -1098,8 +1345,9 @@ end
 local EXPANSION_INDEX = {
     CLASSIC = 0, TBC = 1, WOTLK = 2, CATA = 3, MOP = 4,
     WOD = 5, LEGION = 6, BFA = 7, SL = 8, DF = 9, TWW = 10,
+    MIDNIGHT = 11,
 }
-local CURRENT_EXPANSION_INDEX = 10  -- TWW
+local CURRENT_EXPANSION_INDEX = 11  -- Midnight
 
 -- Get a time multiplier based on content age (old content is trivially fast to clear)
 function FB.Mounts.Resolver:GetLegacyMultiplier(expansion)
@@ -1119,60 +1367,53 @@ function FB.Mounts.Resolver:GetDefaultsForSourceType(sourceType, expansion)
     local age = idx and (CURRENT_EXPANSION_INDEX - idx) or nil
 
     -- Base defaults (assume legacy/solo content unless we know otherwise)
+    -- FIX-1: Drop types no longer fabricate dropChance or expectedAttempts.
+    -- Only curated/Rarity DB data sets these. Unknown drops show "Drop rate: unknown".
     local defaults = {
-        raid_drop        = { timePerAttempt = 20, timeGate = "weekly",  groupRequirement = "solo",  dropChance = 0.01,  expectedAttempts = 100 },
-        dungeon_drop     = { timePerAttempt = 10, timeGate = "daily",   groupRequirement = "solo",  dropChance = 0.01,  expectedAttempts = 100 },
-        world_drop       = { timePerAttempt = 5,  timeGate = "none",    groupRequirement = "solo",  dropChance = 0.005, expectedAttempts = 200 },
-        world_boss       = { timePerAttempt = 5,  timeGate = "weekly",  groupRequirement = "solo",  dropChance = 0.005, expectedAttempts = 200 },
-        reputation       = { timePerAttempt = 30, timeGate = "daily",   groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 30 },
-        currency         = { timePerAttempt = 30, timeGate = "weekly",  groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 10 },
-        quest_chain      = { timePerAttempt = 60, timeGate = "none",    groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 5 },
-        achievement      = { timePerAttempt = 30, timeGate = "none",    groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 10 },
-        profession       = { timePerAttempt = 30, timeGate = "daily",   groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 7 },
-        pvp              = { timePerAttempt = 20, timeGate = "weekly",  groupRequirement = "small", dropChance = nil,   expectedAttempts = 50 },
-        event            = { timePerAttempt = 15, timeGate = "yearly",  groupRequirement = "solo",  dropChance = 0.03,  expectedAttempts = 33 },
-        vendor           = { timePerAttempt = 5,  timeGate = "none",    groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 1 },
-        trading_post     = { timePerAttempt = 0,  timeGate = "monthly", groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 0 },
-        blizzard_shop    = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 0 },
-        tcg              = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 1 },
-        recruit_a_friend = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 1 },
-        promotion        = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  dropChance = nil,   expectedAttempts = 0 },
+        raid_drop        = { timePerAttempt = 20, timeGate = "weekly",  groupRequirement = "solo",  lockoutScope = "character" },
+        dungeon_drop     = { timePerAttempt = 10, timeGate = "daily",   groupRequirement = "solo",  lockoutScope = "character" },
+        world_drop       = { timePerAttempt = 5,  timeGate = "none",    groupRequirement = "solo",  lockoutScope = "character" },
+        world_boss       = { timePerAttempt = 5,  timeGate = "weekly",  groupRequirement = "solo",  lockoutScope = "account" },
+        reputation       = { timePerAttempt = 30, timeGate = "daily",   groupRequirement = "solo",  expectedAttempts = 30,  lockoutScope = "character" },
+        currency         = { timePerAttempt = 30, timeGate = "weekly",  groupRequirement = "solo",  expectedAttempts = 10,  lockoutScope = "character" },
+        quest_chain      = { timePerAttempt = 60, timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 5,   lockoutScope = "character" },
+        achievement      = { timePerAttempt = 30, timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 10,  lockoutScope = "character" },
+        profession       = { timePerAttempt = 30, timeGate = "daily",   groupRequirement = "solo",  expectedAttempts = 7,   lockoutScope = "character" },
+        pvp              = { timePerAttempt = 20, timeGate = "weekly",  groupRequirement = "small", expectedAttempts = 50,  lockoutScope = "character" },
+        event            = { timePerAttempt = 15, timeGate = "yearly",  groupRequirement = "solo",  lockoutScope = "character" },
+        vendor           = { timePerAttempt = 5,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 1,   lockoutScope = "character" },
+        trading_post     = { timePerAttempt = 0,  timeGate = "monthly", groupRequirement = "solo",  expectedAttempts = 0,   lockoutScope = "character" },
+        blizzard_shop    = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 0,   lockoutScope = "character" },
+        tcg              = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 1,   lockoutScope = "character" },
+        recruit_a_friend = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 1,   lockoutScope = "character" },
+        promotion        = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 0,   lockoutScope = "character" },
     }
-    local d = defaults[sourceType] or { timePerAttempt = 15, timeGate = "weekly", groupRequirement = "solo", dropChance = 0.01, expectedAttempts = 100 }
+    local d = defaults[sourceType] or { timePerAttempt = 15, timeGate = "weekly", groupRequirement = "solo", lockoutScope = "character" }
 
-    -- Apply content-age adjustments for drops
+    -- Apply content-age adjustments (time/group only, never fabricate drop rates)
     if sourceType == "raid_drop" then
         if age and age == 0 then
-            -- Current expansion raid: requires a group, long clear times, mythic drops are ~1%
             d.timePerAttempt = 30
             d.groupRequirement = "raid"
-            d.dropChance = 0.01
         elseif age and age == 1 then
-            -- Previous expansion: still somewhat challenging to solo, smaller group possible
             d.timePerAttempt = 20
             d.groupRequirement = "small"
         elseif age and age == 2 then
-            -- 2 expansions old: soloable but takes moderate time
             d.timePerAttempt = 12
         elseif age and age >= 3 then
-            -- 3+ expansions old: trivially soloable, quick clears
             d.timePerAttempt = math.max(3, math.floor(20 * 0.2))
         else
-            -- Unknown expansion: assume moderate
             d.timePerAttempt = 12
         end
     elseif sourceType == "dungeon_drop" then
         if age and age == 0 then
-            -- Current expansion: requires proper group, daily lockout on Heroic/Mythic
             d.timePerAttempt = 15
             d.groupRequirement = "small"
             d.timeGate = "daily"
         elseif age and age == 1 then
-            -- Previous expansion: soloable but Heroic has daily lockout
             d.timePerAttempt = 8
             d.timeGate = "daily"
         elseif age and age >= 2 then
-            -- Old content: farmable on Normal with no lockout, quick runs
             d.timePerAttempt = math.max(2, math.floor(10 * 0.2))
             d.timeGate = "none"
         else
@@ -1181,10 +1422,7 @@ function FB.Mounts.Resolver:GetDefaultsForSourceType(sourceType, expansion)
         end
     elseif sourceType == "world_drop" then
         if age and age <= 1 then
-            -- Current/previous expansion rares: contested, may need camping
             d.timePerAttempt = 15
-            d.dropChance = 0.003
-            d.expectedAttempts = 333
         end
     elseif sourceType == "achievement" then
         if age and age <= 1 then
@@ -1267,6 +1505,7 @@ function FB.Mounts.Resolver:GuessExpansion(sourceText, descText)
     local text = ((sourceText or "") .. " " .. (descText or "")):lower()
 
     local expansionKeywords = {
+        { keys = {"midnight", "quel'thalas", "silvermoon", "gilneas", "lordaeron", "tirisfal", "ghost lands", "eversong"}, expansion = "MIDNIGHT" },
         { keys = {"war within", "khaz algar", "hallowfall", "isle of dorn", "azj%-kahet"}, expansion = "TWW" },
         { keys = {"dragonflight", "dragon isles", "zaralek", "emerald dream", "valdrakken"}, expansion = "DF" },
         { keys = {"shadowlands", "maldraxxus", "bastion", "revendreth", "ardenweald", "zereth mortis", "korthia"}, expansion = "SL" },

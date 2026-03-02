@@ -31,6 +31,16 @@ FB.InstanceData.instances = {
         bossCount = 1,
         soloMinutes = 5,
     },
+    ["Naxxramas"] = {
+        expansion = "WOTLK",
+        bossCount = 15,
+        soloMinutes = 25,
+    },
+    ["Trial of the Crusader"] = {
+        expansion = "WOTLK",
+        bossCount = 5,
+        soloMinutes = 8,
+    },
     -- TBC
     ["Tempest Keep"] = {
         expansion = "TBC",
@@ -40,6 +50,11 @@ FB.InstanceData.instances = {
     ["Karazhan"] = {
         expansion = "TBC",
         bossCount = 12,
+        soloMinutes = 15,
+    },
+    ["Black Temple"] = {
+        expansion = "TBC",
+        bossCount = 9,
         soloMinutes = 15,
     },
     -- CATA
@@ -74,6 +89,11 @@ FB.InstanceData.instances = {
         bossCount = 6,
         soloMinutes = 10,
     },
+    ["Heart of Fear"] = {
+        expansion = "MOP",
+        bossCount = 6,
+        soloMinutes = 12,
+    },
     -- WOD
     ["Blackrock Foundry"] = {
         expansion = "WOD",
@@ -85,6 +105,11 @@ FB.InstanceData.instances = {
         bossCount = 13,
         soloMinutes = 25,
     },
+    ["Highmaul"] = {
+        expansion = "WOD",
+        bossCount = 7,
+        soloMinutes = 15,
+    },
     -- LEGION
     ["Antorus, the Burning Throne"] = {
         expansion = "LEGION",
@@ -95,6 +120,16 @@ FB.InstanceData.instances = {
         expansion = "LEGION",
         bossCount = 10,
         soloMinutes = 20,
+    },
+    ["Emerald Nightmare"] = {
+        expansion = "LEGION",
+        bossCount = 7,
+        soloMinutes = 15,
+    },
+    ["Tomb of Sargeras"] = {
+        expansion = "LEGION",
+        bossCount = 9,
+        soloMinutes = 18,
     },
     -- BFA
     ["Uldir"] = {
@@ -144,6 +179,17 @@ FB.InstanceData.instances = {
         bossCount = 9,
         soloMinutes = 30,
     },
+    -- THE WAR WITHIN
+    ["Nerub-ar Palace"] = {
+        expansion = "TWW",
+        bossCount = 8,
+        soloMinutes = 35,
+    },
+    ["Liberation of Undermine"] = {
+        expansion = "TWW",
+        bossCount = 8,
+        soloMinutes = 40,
+    },
     -- Dungeons
     ["Stratholme"] = {
         expansion = "CLASSIC",
@@ -189,6 +235,47 @@ FB.InstanceData.instances = {
         expansion = "SL",
         bossCount = 8,
         soloMinutes = 12,
+    },
+    -- TWW Dungeons
+    ["The Stonevault"] = {
+        expansion = "TWW",
+        bossCount = 4,
+        soloMinutes = 8,
+    },
+    ["The Dawnbreaker"] = {
+        expansion = "TWW",
+        bossCount = 3,
+        soloMinutes = 7,
+    },
+    ["Ara-Kara, City of Echoes"] = {
+        expansion = "TWW",
+        bossCount = 3,
+        soloMinutes = 7,
+    },
+    ["City of Threads"] = {
+        expansion = "TWW",
+        bossCount = 4,
+        soloMinutes = 8,
+    },
+    ["Cinderbrew Meadery"] = {
+        expansion = "TWW",
+        bossCount = 3,
+        soloMinutes = 7,
+    },
+    ["Darkflame Cleft"] = {
+        expansion = "TWW",
+        bossCount = 4,
+        soloMinutes = 8,
+    },
+    ["Priory of the Sacred Flame"] = {
+        expansion = "TWW",
+        bossCount = 3,
+        soloMinutes = 7,
+    },
+    ["The Rookery"] = {
+        expansion = "TWW",
+        bossCount = 4,
+        soloMinutes = 8,
     },
 }
 

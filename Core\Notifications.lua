@@ -71,9 +71,12 @@ function FB.Notifications:CheckHolidayEvents()
     local today = C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime and C_DateAndTime.GetCurrentCalendarTime()
     if not today then return end
 
-    -- Check today's calendar events
-    C_Calendar.SetAbsMonth(today.month, today.year)
-    local numEvents = C_Calendar.GetNumDayEvents(0, today.monthDay)
+    -- Check today's calendar events (wrapped in pcall to guard against API errors)
+    local setOk = pcall(C_Calendar.SetAbsMonth, today.month, today.year)
+    if not setOk then return end
+
+    local numOk, numEvents = pcall(C_Calendar.GetNumDayEvents, 0, today.monthDay)
+    if not numOk or not numEvents then return end
 
     local eventKeywords = {
         ["hallow"] = "Hallow's End",
@@ -86,7 +89,8 @@ function FB.Notifications:CheckHolidayEvents()
     }
 
     for i = 1, numEvents do
-        local event = C_Calendar.GetDayEvent(0, today.monthDay, i)
+        local evOk, event = pcall(C_Calendar.GetDayEvent, 0, today.monthDay, i)
+        if not evOk then event = nil end
         if event and event.title then
             local titleLower = event.title:lower()
             for keyword, displayName in pairs(eventKeywords) do

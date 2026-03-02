@@ -135,6 +135,7 @@ function FB.TabManager:SelectTab(index)
     local tabCallbacks = {
         [FB.TABS.MOUNT_SEARCH]       = FB.UI.MountSearchTab,
         [FB.TABS.MOUNT_RECOMMEND]    = FB.UI.MountRecommendTab,
+        [FB.TABS.SESSION]            = FB.UI.SessionTab,
         [FB.TABS.ACHIEVEMENTS]       = FB.UI.AchievementTab,
         [FB.TABS.WEEKLY]             = FB.UI.WeeklyTab,
         [FB.TABS.EXPANSION_PROGRESS] = FB.UI.ExpansionProgressTab,

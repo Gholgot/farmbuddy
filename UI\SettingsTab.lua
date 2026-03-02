@@ -64,6 +64,32 @@ function FB.UI.SettingsTab:Init(parentPanel)
         previewLines[i] = line
     end
 
+    -- FIX-6: Playtime assumption section
+    yOffset = yOffset - 15
+    local playtimeHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    playtimeHeader:SetPoint("TOPLEFT", 10, yOffset)
+    playtimeHeader:SetText(FB.COLORS.GOLD .. "Playtime Assumption|r")
+    yOffset = yOffset - 10
+
+    local playtimeDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    playtimeDesc:SetPoint("TOPLEFT", 10, yOffset)
+    playtimeDesc:SetTextColor(0.6, 0.6, 0.6)
+    playtimeDesc:SetText("How many hours per day you expect to play. Affects all time estimates.")
+    yOffset = yOffset - 25
+
+    local hoursSlider = self:CreateSlider(panel, "hoursPerDay", "Hours Per Day",
+        "Average daily playtime for mount farming (shown in all estimates).",
+        yOffset, 0.5, 8, 0.5,
+        (FB.db and FB.db.settings and FB.db.settings.hoursPerDay) or 2,
+        function(value)
+            if FB.db and FB.db.settings then
+                FB.db.settings.hoursPerDay = value
+            end
+            self:UpdatePreview()
+        end)
+    sliders["hoursPerDay"] = hoursSlider
+    yOffset = yOffset - 55
+
     -- Scan Settings Section
     yOffset = yOffset - 15
     local scanHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -130,7 +156,13 @@ function FB.UI.SettingsTab:Init(parentPanel)
             if show then
                 FB.MinimapButton:Create()
             else
-                FB.MinimapButton:Toggle()
+                -- Use Hide() directly if available to unconditionally hide the button;
+                -- Toggle() could re-show it if the button is already hidden.
+                if FB.MinimapButton.Hide then
+                    FB.MinimapButton:Hide()
+                elseif FB.MinimapButton.button and FB.MinimapButton.button:IsShown() then
+                    FB.MinimapButton:Toggle()
+                end
             end
         end
     end)
@@ -265,6 +297,9 @@ function FB.UI.SettingsTab:RefreshSliders()
             -- Support legacy dropChance key mapped to effort
             elseif key == "effort" and weights and weights["dropChance"] then
                 container.slider:SetValue(weights["dropChance"])
+            -- Check hoursPerDay
+            elseif key == "hoursPerDay" and FB.db.settings.hoursPerDay then
+                container.slider:SetValue(FB.db.settings.hoursPerDay)
             -- Check scan settings
             elseif key == "batchSize" and FB.db.settings.scan then
                 container.slider:SetValue(FB.db.settings.scan.batchSize or 5)
@@ -300,6 +335,7 @@ function FB.UI.SettingsTab:UpdatePreview()
             attemptsRemaining = cached.immediatelyAvailable and 1 or 0,
             groupRequirement = cached.groupRequirement or "solo",
             dropChance = cached.dropChance,
+            dropChanceSource = cached.dropChanceSource,
             expectedAttempts = cached.expectedAttempts,
         }, weights)
 

@@ -130,7 +130,8 @@ function FB.WeeklyTracker:GetWeeklyMounts()
                         -- Try to guess expansion and source type from source text
                         local _, descText = nil, nil
                         if extraOk then
-                            descText = select(2, pcall(C_MountJournal.GetMountInfoExtraByID, mountID))
+                            local _ok2, _creatureDisplayID, _descText = pcall(C_MountJournal.GetMountInfoExtraByID, mountID)
+                            if _ok2 then descText = _descText end
                         end
                         local guessedExpansion = FB.Mounts.Resolver and FB.Mounts.Resolver.GuessExpansion
                             and FB.Mounts.Resolver:GuessExpansion(sourceText, descText) or nil
@@ -143,7 +144,7 @@ function FB.WeeklyTracker:GetWeeklyMounts()
                             instanceName = instanceName,
                             difficultyID = nil,
                             expansion = guessedExpansion,
-                            dropChance = 0.01,
+                            dropChance = nil,
                             blizzSourceType = sourceType,
                             guessedSourceType = guessedSourceType,
                             characters = {},

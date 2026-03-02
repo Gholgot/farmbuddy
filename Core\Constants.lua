@@ -141,15 +141,17 @@ FB.REWARD_TYPES = {
 FB.TABS = {
     MOUNT_SEARCH       = 1,
     MOUNT_RECOMMEND    = 2,
-    ACHIEVEMENTS       = 3,
-    WEEKLY             = 4,
-    EXPANSION_PROGRESS = 5,
-    SETTINGS           = 6,
+    SESSION            = 3,
+    ACHIEVEMENTS       = 4,
+    WEEKLY             = 5,
+    EXPANSION_PROGRESS = 6,
+    SETTINGS           = 7,
 }
 
 FB.TAB_NAMES = {
     "Mount Search",
     "Recommendations",
+    "Session Planner",
     "Achievements",
     "Weekly Tracker",
     "Expansion",
@@ -166,6 +168,21 @@ FB.COLORS = {
     WHITE   = "|cFFFFFFFF",
     GRAY    = "|cFF888888",
     GOLD    = "|cFFFFD200",
+}
+
+-- FIX-14: Confidence level colors
+-- Thresholds set in MountResolver.lua uncurated confidence block: >=70% high, >=40% medium, <40% low
+FB.CONFIDENCE_COLORS = {
+    high   = "|cFF00FF00",  -- Green (≥70%)
+    medium = "|cFFFFFF00",  -- Yellow (≥40%)
+    low    = "|cFFFF8800",  -- Orange (<40%)
+}
+
+-- Source types that involve random drops (used for scoring and display)
+-- Defined here to avoid duplication between ScoringEngine.lua and Utils.lua
+FB.DROP_SOURCE_TYPES = {
+    raid_drop = true, dungeon_drop = true, world_drop = true,
+    world_boss = true, event = true,
 }
 
 -- Class colors (for weekly tracker)

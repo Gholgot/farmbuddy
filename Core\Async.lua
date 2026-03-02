@@ -35,6 +35,9 @@ function FB.Async:RunBatched(items, workFunc, batchSize, onProgress, onComplete)
         for i = 1, total do
             if cancelled then return end
 
+            -- LOW-9: When workFunc returns nil, the item is filtered out of results.
+            -- onProgress reports the raw item index (i), not the count of accepted results.
+            -- So onProgress(current, total) may show 100% even if many items were filtered.
             local ok, result = pcall(workFunc, items[i])
             if ok and result then
                 results[#results + 1] = result
@@ -79,29 +82,31 @@ function FB.Async:RunBatched(items, workFunc, batchSize, onProgress, onComplete)
             if ticker then ticker:Cancel() end
             if not cancelled and not completed and onComplete then
                 completed = true
+                if onProgress then onProgress(total, total) end
                 onComplete(results)
             end
             return
-        end
-        if onProgress then
-            onProgress(current, total)
         end
         local ok, err = coroutine.resume(co)
         if not ok then
             FB:Debug("Async coroutine error: " .. tostring(err))
             if ticker then ticker:Cancel() end
+            return
+        end
+        if onProgress then
+            onProgress(current, total)
         end
     end)
 
     local handle = {
-        Cancel = function()
+        Cancel = function(self)
             cancelled = true
             if ticker then ticker:Cancel() end
         end,
-        IsRunning = function()
+        IsRunning = function(self)
             return not cancelled and coroutine.status(co) ~= "dead"
         end,
-        GetProgress = function()
+        GetProgress = function(self)
             return current, total
         end,
     }

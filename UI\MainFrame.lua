@@ -131,6 +131,7 @@ function FB.UI:CreateMainFrame()
     local tabInits = {
         { name = "MountSearchTab",       module = FB.UI.MountSearchTab,       tab = FB.TABS.MOUNT_SEARCH },
         { name = "MountRecommendTab",    module = FB.UI.MountRecommendTab,    tab = FB.TABS.MOUNT_RECOMMEND },
+        { name = "SessionTab",           module = FB.UI.SessionTab,           tab = FB.TABS.SESSION },
         { name = "AchievementTab",       module = FB.UI.AchievementTab,       tab = FB.TABS.ACHIEVEMENTS },
         { name = "WeeklyTab",            module = FB.UI.WeeklyTab,            tab = FB.TABS.WEEKLY },
         { name = "ExpansionProgressTab", module = FB.UI.ExpansionProgressTab, tab = FB.TABS.EXPANSION_PROGRESS },

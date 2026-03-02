@@ -93,9 +93,13 @@ function FB.UI.Widgets:CreateScoreBar(parent, name)
         ))
 
         local components = scoreResult.components or {}
+        -- LOW-5: Use 150 as the normalization cap instead of 100.
+        -- effortScore can reach ~115 (with the 15% unknown-drop penalty),
+        -- so a cap of 100 would clip legitimate high values.
+        local SCORE_BAR_MAX = 150
         for key, bar in pairs(bars) do
             local value = components[key] or 0
-            local ratio = math.min(value / 100, 1.0)
+            local ratio = math.min(value / SCORE_BAR_MAX, 1.0)
             bar.fill:SetWidth(math.max(1, 150 * ratio))
             bar.valueText:SetText(string.format("%.0f", value))
         end

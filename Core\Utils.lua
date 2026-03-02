@@ -74,12 +74,57 @@ function FB.Utils:FormatDays(days)
         return months == 1 and "1 month" or string.format("%d months", months)
     else
         local years = days / 365
-        if years < 2 then
+        -- Show months only up to ~18 months; anything over shows as years.
+        -- This avoids confusing output like "13 months" for ~400 days.
+        if years < 1.5 then
             local months = math.floor(days / 30)
             return months == 1 and "1 month" or string.format("%d months", months)
         end
         return string.format("%.1f years", years)
     end
+end
+
+-- FIX-7: Format a range of days for RNG mounts (percentile-based)
+-- Only for mounts with known drop rates.
+-- @param dropChance    number (0-1)
+-- @param attemptsPerDay number (how many attempts per day given lockout)
+-- @param hoursPerDay   number (daily playtime hours)
+-- @return string like "~3-15 days (avg 7)" or nil if inputs invalid
+function FB.Utils:FormatDaysRange(dropChance, attemptsPerDay, hoursPerDay)
+    if not dropChance or dropChance <= 0 or dropChance >= 1 then return nil end
+    attemptsPerDay = attemptsPerDay or 1
+    hoursPerDay = hoursPerDay or 2
+
+    local logBase = math.log(1 - dropChance)
+    if logBase >= 0 then return nil end  -- Avoid division by zero
+
+    -- Percentile-based attempt counts
+    local p25Attempts = math.ceil(math.log(0.75) / logBase)  -- 25th percentile (lucky)
+    local p50Attempts = math.ceil(math.log(0.5) / logBase)   -- 50th percentile (median)
+    local p90Attempts = math.ceil(math.log(0.1) / logBase)   -- 90th percentile (unlucky)
+
+    -- Convert attempts to calendar days
+    local luckyDays = math.max(1, math.ceil(p25Attempts / attemptsPerDay))
+    local medianDays = math.max(1, math.ceil(p50Attempts / attemptsPerDay))
+    local unluckyDays = math.max(1, math.ceil(p90Attempts / attemptsPerDay))
+
+    -- MED-5: For yearly events, attemptsPerDay is a fraction (e.g., 14/365 ≈ 0.038).
+    -- This causes unluckyDays to balloon into multi-year values.
+    -- When the p90 unlucky estimate exceeds 1 year, format in years to avoid
+    -- confusing output like "~10 years". Note: this reflects real calendar time
+    -- including the many non-event days between annual occurrences.
+    if unluckyDays > 365 then
+        return string.format("~%s-%s (avg %s, calendar time incl. non-event days)",
+            self:FormatDays(luckyDays),
+            self:FormatDays(unluckyDays),
+            self:FormatDays(medianDays))
+    end
+
+    return string.format("~%s-%s (avg %s) (at %sh/day)",
+        self:FormatDays(luckyDays),
+        self:FormatDays(unluckyDays),
+        self:FormatDays(medianDays),
+        tostring(hoursPerDay))
 end
 
 -- Format gold amount with commas (e.g., 5,000,000)
@@ -115,7 +160,7 @@ function FB.Utils:ColorByScore(text, score, maxScore)
         r = 1.0
         g = 1.0 - ((ratio - 0.5) * 2)
     end
-    local hexColor = string.format("|cFF%02x%02x00", math.floor(r * 255), math.floor(g * 255))
+    local hexColor = string.format("|cFF%02X%02X00", math.floor(r * 255), math.floor(g * 255))
     return hexColor .. text .. "|r"
 end
 
@@ -344,6 +389,10 @@ end
 -- =====================
 -- Shared by MountSearchTab, MountRecommendTab, and any future mount detail views.
 
+-- Source types that involve random drops
+-- Reference FB.DROP_SOURCE_TYPES defined in Core\Constants.lua (MED-2)
+local DROP_SOURCE_TYPES = FB.DROP_SOURCE_TYPES
+
 local STANDING_NAMES = {
     [1] = "Hated", [2] = "Hostile", [3] = "Unfriendly", [4] = "Neutral",
     [5] = "Friendly", [6] = "Honored", [7] = "Revered", [8] = "Exalted",
@@ -571,18 +620,26 @@ function FB.Utils:BuildMountAutoSteps(item)
         end
     end
 
-    -- Step 10: Drop chance
+    -- Step 10: Drop chance (with source transparency)
     if item.dropChance then
         local pct = item.dropChance * 100
+        local sourceTag = ""
+        if item.dropChanceSource == "curated" then
+            sourceTag = " [verified]"
+        elseif item.dropChanceSource == "rarity_db" then
+            sourceTag = " [community data]"
+        end
         local label
         if pct >= 5 then
-            label = string.format("%.0f%% drop chance (decent odds)", pct)
+            label = string.format("%.0f%% drop chance (decent odds)%s", pct, sourceTag)
         elseif pct >= 1 then
-            label = string.format("%.1f%% drop chance (~%d attempts expected)", pct, item.expectedAttempts or math.ceil(1 / item.dropChance))
+            label = string.format("%.1f%% drop chance (~%d attempts expected)%s", pct, item.expectedAttempts or math.ceil(1 / item.dropChance), sourceTag)
         else
-            label = string.format("%.2f%% drop chance (~%d attempts expected)", pct, item.expectedAttempts or math.ceil(1 / item.dropChance))
+            label = string.format("%.2f%% drop chance (~%d attempts expected)%s", pct, item.expectedAttempts or math.ceil(1 / item.dropChance), sourceTag)
         end
         steps[#steps + 1] = label
+    elseif DROP_SOURCE_TYPES[item.sourceType] then
+        steps[#steps + 1] = "Drop rate: unknown"
     end
 
     return steps
@@ -661,10 +718,57 @@ function FB.Utils:BuildMountDetailLines(item, showCollected)
             local standingLine = "  Standing: " .. standingColor .. repInfo.current .. "|r"
                 .. "  ->  Required: " .. FB.COLORS.GOLD .. repInfo.target .. "|r"
             lines[#lines + 1] = standingLine
-            -- Numeric tier progress
+            -- FIX-8D: Precise rep remaining and time estimate
             if repInfo.currentValue and repInfo.maxValue and repInfo.maxValue > 0 then
                 lines[#lines + 1] = "  " .. FB.COLORS.GRAY
                     .. "Tier progress: " .. repInfo.currentValue .. " / " .. repInfo.maxValue .. "|r"
+            end
+            -- Show precise points remaining and estimated days
+            if item.factionID then
+                local repRemaining, renownRemaining = nil, nil
+                if FB.ProgressResolver and FB.ProgressResolver.GetRepPointsRemaining then
+                    local ok
+                    ok, repRemaining, renownRemaining = pcall(
+                        FB.ProgressResolver.GetRepPointsRemaining, FB.ProgressResolver,
+                        item.factionID, item.targetStanding, item.targetRenown
+                    )
+                    if not ok then repRemaining, renownRemaining = nil, nil end
+                end
+
+                local repData = FB.ReputationData and FB.ReputationData[item.factionID]
+                if repInfo.isRenown and renownRemaining and renownRemaining > 0 then
+                    local goalRenown = item.targetRenown or "max"
+                    local currentRenown = repInfo.renownLevel or 0
+                    local daysStr = ""
+                    if repData and repData.method == "renown" and repData.weeklyRep > 0 then
+                        local weeks = math.ceil(renownRemaining / repData.weeklyRep)
+                        daysStr = string.format(" (~%d weeks at weekly cap)", weeks)
+                    end
+                    lines[#lines + 1] = "  " .. FB.COLORS.YELLOW
+                        .. "Renown: " .. currentRenown .. " / " .. goalRenown .. daysStr .. "|r"
+                elseif repRemaining and repRemaining > 0 then
+                    local daysStr = ""
+                    if repData then
+                        local methodLabel = ""
+                        if repData.method == "tabard" then
+                            local days = math.ceil(repRemaining / math.max(1, repData.dailyRep))
+                            daysStr = string.format(" (~%d days via tabard farming)", days)
+                        elseif repData.method == "daily" then
+                            local effectiveDaily = repData.dailyRep + (repData.weeklyRep / 7)
+                            local days = math.ceil(repRemaining / math.max(1, effectiveDaily))
+                            daysStr = string.format(" (~%d days via dailies)", days)
+                        end
+                    end
+                    -- Format remaining rep with commas
+                    local repStr = tostring(math.floor(repRemaining))
+                    while true do
+                        local k
+                        repStr, k = repStr:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+                        if k == 0 then break end
+                    end
+                    lines[#lines + 1] = "  " .. FB.COLORS.YELLOW
+                        .. "Rep: " .. repStr .. " remaining to " .. repInfo.target .. daysStr .. "|r"
+                end
             end
             -- Text progress bar
             local repOk, repProgress = pcall(FB.ProgressResolver.GetRepProgress,
@@ -718,7 +822,7 @@ function FB.Utils:BuildMountDetailLines(item, showCollected)
         lines[#lines + 1] = FB.COLORS.GRAY .. table.concat(detailParts, " | ") .. "|r"
     end
 
-    -- Drop info line
+    -- FIX-15: Drop info line with source transparency
     if item.dropChance then
         local pct = item.dropChance * 100
         local dropStr
@@ -727,7 +831,16 @@ function FB.Utils:BuildMountDetailLines(item, showCollected)
         else
             dropStr = string.format("%.2f%% drop", pct)
         end
+        -- Add source tag
+        if item.dropChanceSource == "curated" then
+            dropStr = dropStr .. " (verified)"
+        elseif item.dropChanceSource == "rarity_db" then
+            dropStr = dropStr .. " (community data)"
+        end
         lines[#lines + 1] = FB.COLORS.GRAY .. dropStr .. " | ~" .. (item.expectedAttempts or "?") .. " attempts expected|r"
+    elseif DROP_SOURCE_TYPES[item.sourceType] then
+        -- FIX-15: Unknown drop rate for drop-type mounts
+        lines[#lines + 1] = FB.COLORS.ORANGE .. "Drop Rate: Unknown|r"
     end
 
     -- Player ownership rarity (from Data for Azeroth)
@@ -1003,10 +1116,28 @@ function FB.Utils:BuildMountDetailLines(item, showCollected)
         end
     end
 
-    -- Estimate section (only for enriched mounts)
+    -- FIX-7: Estimate section with range for RNG, single for guaranteed
     if item.effectiveDays and item.effectiveDays > 0 then
         lines[#lines + 1] = ""
-        lines[#lines + 1] = FB.COLORS.YELLOW .. "Est. Time to Get: ~" .. self:FormatDays(item.effectiveDays) .. "|r"
+        local hoursPerDay = (FB.db and FB.db.settings and FB.db.settings.hoursPerDay) or 2
+        if item.dropChance and item.dropChance > 0 and item.dropChance < 1 then
+            -- RNG: show range estimate
+            local gateDays = FB.TIME_GATE_FACTORS[item.timeGate or "none"] or 0
+            local attemptsPerDay = gateDays > 0 and (1 / gateDays) or
+                math.max(1, math.floor(hoursPerDay * 60 / math.max(1, item.timePerAttempt or 10)))
+            local rangeStr = self:FormatDaysRange(item.dropChance, attemptsPerDay, hoursPerDay)
+            if rangeStr then
+                lines[#lines + 1] = FB.COLORS.YELLOW .. "Est. Time to Get: " .. rangeStr .. "|r"
+            else
+                lines[#lines + 1] = FB.COLORS.YELLOW .. "Est. Time to Get: ~"
+                    .. self:FormatDays(item.effectiveDays) .. " (at " .. hoursPerDay .. "h/day)|r"
+            end
+        elseif item.isUnknownDrop then
+            lines[#lines + 1] = FB.COLORS.ORANGE .. "Est. Time to Get: unknown (drop rate not available)|r"
+        else
+            lines[#lines + 1] = FB.COLORS.YELLOW .. "Est. Time to Get: ~"
+                .. self:FormatDays(item.effectiveDays) .. " (at " .. hoursPerDay .. "h/day)|r"
+        end
     end
 
     if item.immediatelyAvailable ~= nil then
@@ -1014,6 +1145,31 @@ function FB.Utils:BuildMountDetailLines(item, showCollected)
             lines[#lines + 1] = FB.COLORS.GREEN .. "Available right now!|r"
         else
             lines[#lines + 1] = FB.COLORS.RED .. "Currently locked this reset|r"
+        end
+    end
+
+    -- FIX-14: Confidence indicator
+    if item.confidencePercent then
+        local confColor = FB.CONFIDENCE_COLORS and
+            FB.CONFIDENCE_COLORS[item.confidence or "low"] or FB.COLORS.GRAY
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = confColor .. "Data Confidence: " .. item.confidencePercent .. "%|r"
+        -- List estimated fields when not high confidence
+        if item.confidence ~= "high" and item.dataQuality then
+            local verified = table.concat(item.dataQuality, ", ")
+            if verified ~= "" then
+                lines[#lines + 1] = FB.COLORS.GRAY .. "  Verified: " .. verified .. "|r"
+            end
+            local missing = {}
+            local allFields = { "drop rate", "instance", "expansion", "clear time" }
+            local knownSet = {}
+            for _, v in ipairs(item.dataQuality or {}) do knownSet[v] = true end
+            for _, f in ipairs(allFields) do
+                if not knownSet[f] then missing[#missing + 1] = f end
+            end
+            if #missing > 0 then
+                lines[#lines + 1] = FB.COLORS.GRAY .. "  Estimated: " .. table.concat(missing, ", ") .. "|r"
+            end
         end
     end
 

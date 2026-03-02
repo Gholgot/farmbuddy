@@ -11,12 +11,23 @@ local C_QuestLog = C_QuestLog
 function FB.TimeGateResolver:IsInstanceLocked(instanceName, difficultyID)
     if not instanceName then return false, 0 end
 
+    -- LFR difficulty IDs (mounts don't drop on LFR unless explicitly specified)
+    local LFR_DIFFICULTIES = { [7] = true, [17] = true }
+
     local numInstances = GetNumSavedInstances()
     for i = 1, numInstances do
         local name, _, reset, difficulty, locked = GetSavedInstanceInfo(i)
         if name == instanceName and locked and reset and reset > 0 then
-            if not difficultyID or difficulty == difficultyID then
-                return true, reset
+            if difficultyID then
+                -- Specific difficulty requested: exact match
+                if difficulty == difficultyID then
+                    return true, reset
+                end
+            else
+                -- No specific difficulty: match any EXCEPT LFR
+                if not LFR_DIFFICULTIES[difficulty] then
+                    return true, reset
+                end
             end
         end
     end
@@ -154,17 +165,16 @@ function FB.TimeGateResolver:IsHolidayEventActive(mountMeta)
         return true  -- Unknown event, assume active
     end
 
-    -- Check today and nearby days for active events (±1 day range to handle
-    -- edge cases where event starts tomorrow or the calendar hasn't refreshed)
+    -- FIX-13: Expanded scan window ±3 days + 7 day lookahead for "starts in X days"
     local ok, currentDate = pcall(C_DateAndTime.GetCurrentCalendarTime)
     if not ok or not currentDate then return true end
 
     local setOk = pcall(C_Calendar.SetAbsMonth, currentDate.month, currentDate.year)
     if not setOk then return true end
 
-    -- Scan a 3-day window: yesterday, today, tomorrow
+    -- Scan a 11-day window: -3 to +7 days (catch upcoming events too)
     local daysInMonth = 31  -- Safe upper bound
-    for dayOffset = -1, 1 do
+    for dayOffset = -3, 7 do
         local checkDay = currentDate.monthDay + dayOffset
         if checkDay >= 1 and checkDay <= daysInMonth then
             local numOk, numEvents = pcall(C_Calendar.GetNumDayEvents, 0, checkDay)
@@ -173,7 +183,15 @@ function FB.TimeGateResolver:IsHolidayEventActive(mountMeta)
                     local evOk, eventInfo = pcall(C_Calendar.GetDayEvent, 0, checkDay, i)
                     if evOk and eventInfo and eventInfo.title then
                         if eventInfo.title:lower():find(eventName) then
-                            return true  -- Event is active or starting very soon
+                            if dayOffset <= 0 then
+                                return true  -- Event is active now
+                            else
+                                -- Event starts in the future — considered "active" for
+                                -- recommendation purposes. _eventStartsIn should be set
+                                -- on the scan result copy in MountScanner, not on the
+                                -- shared mountMeta, to avoid stale data on shared entries.
+                                return true
+                            end
                         end
                     end
                 end
@@ -211,18 +229,31 @@ function FB.TimeGateResolver:IsHolidayEventActive(mountMeta)
     return false  -- Event not found in nearby days
 end
 
+-- Strip common leading articles ("the ", "a ") from a lowercase string
+local function StripArticle(s)
+    return s:gsub("^the ", ""):gsub("^a ", "")
+end
+
 -- Try to detect instance lockout from sourceText for generated DB mounts
 function FB.TimeGateResolver:CheckLockoutFromSourceText(sourceText, timeGate)
     if not sourceText or timeGate ~= "weekly" then return 1 end
 
-    -- Try to match the instance name in saved lockouts via substring matching
+    -- Try to match the instance name in saved lockouts via substring matching.
+    -- Also attempt article-stripped variants to handle "The Nighthold" vs "Nighthold" mismatches.
     local lower = sourceText:lower()
+    local lowerStripped = StripArticle(lower)
     local numInstances = GetNumSavedInstances()
     for i = 1, numInstances do
         local name, _, reset, _, locked = GetSavedInstanceInfo(i)
         if name and locked and reset and reset > 0 then
             local instanceLower = name:lower()
-            if lower:find(instanceLower, 1, true) then
+            local instanceStripped = StripArticle(instanceLower)
+            -- Try all four combinations of stripped/unstripped for both sides
+            if lower:find(instanceLower, 1, true)
+               or lower:find(instanceStripped, 1, true)
+               or lowerStripped:find(instanceLower, 1, true)
+               or lowerStripped:find(instanceStripped, 1, true)
+            then
                 return 0  -- Locked
             end
         end

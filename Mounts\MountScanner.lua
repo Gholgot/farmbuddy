@@ -51,6 +51,15 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
             -- Skip unobtainable
             if not FB.Scoring:IsScoreable(input.sourceType) then return nil end
 
+            -- FIX-4: Filter faction-specific mounts at scan time
+            if input.isFactionSpecific and input.faction and FB.playerFaction then
+                local playerIsAlliance = (FB.playerFaction == "Alliance")
+                local mountIsAlliance = (input.faction == "ALLIANCE" or input.faction == 0)
+                if playerIsAlliance ~= mountIsAlliance then
+                    return nil  -- Wrong faction, don't recommend
+                end
+            end
+
             -- Enrich with warband availability for time-gated mounts (#1)
             if input.lockoutInstanceName and input.timeGate == "weekly" and FB.CharacterData
                and FB.CharacterData.GetWarbandLockoutStatus then
@@ -85,8 +94,13 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                 timeGate = input.timeGate,
                 timePerAttempt = input.timePerAttempt,
                 dropChance = input.dropChance,
+                dropChanceSource = input.dropChanceSource,
+                lockoutScope = input.lockoutScope,
                 steps = input.steps,
                 hasCuratedData = input.hasCuratedData,
+                confidence = input.confidence,
+                confidencePercent = input.confidencePercent,
+                dataQuality = input.dataQuality,
                 progressRemaining = input.progressRemaining,
 
                 -- Reputation/currency metadata (for detail display)
@@ -107,6 +121,15 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                 warbandAvailable = input.warbandAvailable,
                 warbandTotal = input.warbandTotal,
                 staleDays = input.staleDays,
+                synergies = FB.SynergyResolver and FB.SynergyResolver.FindSynergies
+                    and FB.SynergyResolver:FindSynergies({
+                        expansion = input.expansion,
+                        achievementID = input.achievementID,
+                        lockoutInstanceName = input.lockoutInstanceName,
+                        groupRequirement = input.groupRequirement,
+                    }) or {},
+                attemptCount = (FB.db and FB.db.mountAttemptCounts and FB.db.mountAttemptCounts[input.id])
+                    and FB.db.mountAttemptCounts[input.id].total or nil,
 
                 -- Score
                 score = result.score,
@@ -114,7 +137,10 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                 effectiveDays = result.effectiveDays,
                 expectedAttempts = result.expectedAttempts,
                 immediatelyAvailable = result.immediatelyAvailable,
-                scoreExplanation = result.scoreExplanation,
+                scoreExplanation = result.scoreExplanation
+                    .. (input.confidence == "low" and " | (data: estimated)" or
+                        input.confidence == "medium" and " | (data: partial)" or ""),
+                isUnknownDrop = result.isUnknownDrop,
             }
         end,
         batchSize,
@@ -142,6 +168,8 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                         attemptsRemaining = r.attemptsRemaining,
                         groupRequirement = r.groupRequirement,
                         dropChance = r.dropChance,
+                        dropChanceSource = r.dropChanceSource,
+                        lockoutScope = r.lockoutScope,
                         expectedAttempts = r.expectedAttempts,
                         warbandAvailable = r.warbandAvailable,
                         warbandTotal = r.warbandTotal,
@@ -153,7 +181,55 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                     r.components = rescore.components
                     r.effectiveDays = rescore.effectiveDays
                     r.immediatelyAvailable = rescore.immediatelyAvailable
+                    -- Re-apply confidence suffix that was added in the initial score pass
                     r.scoreExplanation = rescore.scoreExplanation
+                        .. (r.confidence == "low" and " | (data: estimated)" or
+                            r.confidence == "medium" and " | (data: partial)" or "")
+                end
+            end
+
+            -- Apply synergy discount: mounts with achievement synergies get a bonus
+            if FB.SynergyResolver then
+                for _, r in ipairs(results) do
+                    if r.synergies and #r.synergies > 0 then
+                        local discount = FB.SynergyResolver:GetSynergyDiscount(r.synergies)
+                        if discount > 0 then
+                            r.score = r.score * (1 - discount)
+                            -- Append synergy info to explanation
+                            local mountSynCount = 0
+                            for _, s in ipairs(r.synergies) do
+                                if s.rewardType == "mount" then mountSynCount = mountSynCount + 1 end
+                            end
+                            if mountSynCount > 0 then
+                                r.scoreExplanation = r.scoreExplanation .. " | +" .. mountSynCount .. " achievement mount(s)"
+                            else
+                                r.scoreExplanation = r.scoreExplanation .. " | +" .. #r.synergies .. " achievement(s)"
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- Diminishing returns: annotate mounts with high attempt counts
+            if FB.db and FB.db.mountAttemptCounts then
+                for _, r in ipairs(results) do
+                    if r.attemptCount and r.dropChance and r.dropChance > 0 then
+                        local expected = math.ceil(1 / r.dropChance)
+                        if r.attemptCount > expected then
+                            local ratio = r.attemptCount / expected
+                            local pUnlucky = math.pow(1 - r.dropChance, r.attemptCount) * 100
+                            r.luckPercentile = pUnlucky
+                            r.scoreExplanation = r.scoreExplanation .. string.format(
+                                " | %d/%d attempts (unluckiest %.0f%%)",
+                                r.attemptCount, expected, pUnlucky
+                            )
+                        elseif r.attemptCount > 0 then
+                            r.scoreExplanation = r.scoreExplanation .. string.format(
+                                " | %d/%d attempts",
+                                r.attemptCount, expected
+                            )
+                        end
+                    end
                 end
             end
 
@@ -229,6 +305,7 @@ function FB.Mounts.Scanner:FilterResults(results, filters)
         if filters.showEvent == false and r.sourceType == "event" then pass = false end
         if filters.showWorldDrop == false and (r.sourceType == "world_drop" or r.sourceType == "world_boss") then pass = false end
         if filters.showPvP == false and r.sourceType == "pvp" then pass = false end
+        if filters.showTradingPost == false and r.sourceType == "trading_post" then pass = false end
         if filters.showProfession == false and r.sourceType == "profession" then pass = false end
         if filters.showAchievement == false and r.sourceType == "achievement" then pass = false end
         if filters.showVendor == false and r.sourceType == "vendor" then pass = false end

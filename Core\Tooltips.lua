@@ -32,7 +32,8 @@ function FB.Tooltips:OnMountTooltip(tooltip, spellID)
     local mountID = self:FindMountIDBySpellID(spellID)
     if not mountID then return end
 
-    local _, _, _, _, _, _, _, _, _, _, isCollected = C_MountJournal.GetMountInfoByID(mountID)
+    local ok, _, _, _, _, _, _, _, _, _, _, isCollected = pcall(C_MountJournal.GetMountInfoByID, mountID)
+    if not ok then return end
     if isCollected then return end  -- Don't show for collected mounts
 
     -- Get cached score data

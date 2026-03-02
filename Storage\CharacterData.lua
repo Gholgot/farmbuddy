@@ -250,6 +250,11 @@ function FB.CharacterData:RecordMountAttempts()
 
     local now = time()
 
+    -- MED-10: Track which spellIDs were updated in the first pass (MountDB.entries)
+    -- so the second pass (cachedMountScores) skips mounts already recorded.
+    -- Without this guard, curated mounts present in both tables get double-counted.
+    local updated = {}
+
     -- For each active lockout, find mounts in MountDB that reference that instance
     for _, lockout in pairs(FB.charDB.lockouts) do
         if lockout.locked and lockout.name then
@@ -259,6 +264,46 @@ function FB.CharacterData:RecordMountAttempts()
                     local metaInst = meta.lockoutInstanceName:lower()
                     if metaInst == lockName or lockName:find(metaInst, 1, true) or metaInst:find(lockName, 1, true) then
                         FB.db.mountAttempts[spellID] = now
+                        updated[spellID] = true
+                        -- Increment attempt counter for diminishing returns tracking
+                        if FB.db.mountAttemptCounts then
+                            local counter = FB.db.mountAttemptCounts[spellID]
+                            if not counter then
+                                FB.db.mountAttemptCounts[spellID] = { total = 1, first = now, last = now }
+                            else
+                                counter.total = counter.total + 1
+                                counter.last = now
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Also check cached scan results for generated mounts with resolved lockout instances.
+    -- Skip any spellID already recorded in the first pass to avoid double-counting.
+    if FB.db.cachedMountScores then
+        for _, scored in ipairs(FB.db.cachedMountScores) do
+            if scored.lockoutInstanceName and not updated[scored.id] then
+                local scoredInst = scored.lockoutInstanceName:lower()
+                for _, lockout in pairs(FB.charDB.lockouts) do
+                    if lockout.locked and lockout.name then
+                        local lockName = lockout.name:lower()
+                        if scoredInst == lockName or lockName:find(scoredInst, 1, true) or scoredInst:find(lockName, 1, true) then
+                            FB.db.mountAttempts[scored.id] = now
+                            updated[scored.id] = true
+                            -- Increment attempt counter for diminishing returns tracking
+                            if FB.db.mountAttemptCounts then
+                                local counter = FB.db.mountAttemptCounts[scored.id]
+                                if not counter then
+                                    FB.db.mountAttemptCounts[scored.id] = { total = 1, first = now, last = now }
+                                else
+                                    counter.total = counter.total + 1
+                                    counter.last = now
+                                end
+                            end
+                        end
                     end
                 end
             end

@@ -119,7 +119,7 @@ EXPANSION_INDEX = {
     "WOD": 5, "LEGION": 6, "BFA": 7, "SL": 8, "DF": 9, "TWW": 10,
     "MIDNIGHT": 11,
 }
-CURRENT_EXPANSION = 10  # TWW
+CURRENT_EXPANSION = 11  # Midnight
 
 
 # ---------------------------------------------------------------------------
@@ -615,6 +615,7 @@ def guess_expansion_from_text(text):
         return None
     lower = text.lower()
     keywords = [
+        (["midnight", "quel'thalas", "silvermoon", "gilneas", "lordaeron", "tirisfal", "ghostlands", "eversong"], "MIDNIGHT"),
         (["war within", "khaz algar", "hallowfall", "isle of dorn"], "TWW"),
         (["dragonflight", "dragon isles", "zaralek", "valdrakken"], "DF"),
         (["shadowlands", "maldraxxus", "bastion", "revendreth"], "SL"),

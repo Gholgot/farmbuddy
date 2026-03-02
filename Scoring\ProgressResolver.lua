@@ -42,6 +42,8 @@ function FB.ProgressResolver:GetRepProgress(factionID, targetStanding, targetRen
             -- e.g., Netherwing starts at Hated, Bloodsail Buccaneers start at Hated
             -- Use min(currentReaction, 4) as the floor: if player is below Neutral,
             -- we know the faction started below Neutral; otherwise assume Neutral start
+            -- NOTE: Assumes faction starts at Neutral. Some race-aligned factions start higher,
+            -- which may slightly understate progress.
             local baseStanding = math.min(currentReaction, 4)
             local standingsToGo = targetStanding - baseStanding
             if standingsToGo <= 0 then return 0.0 end
@@ -285,6 +287,74 @@ function FB.ProgressResolver:ParseGoldCost(sourceText)
     end
 
     return nil
+end
+
+-- FIX-8A: Compute exact reputation points remaining to target standing
+-- Standing tier sizes (traditional rep system)
+local STANDING_TIER_SIZES = {
+    [1] = 36000, -- Hated (only for factions that start at Hated)
+    [2] = 3000,  -- Hostile
+    [3] = 3000,  -- Unfriendly
+    [4] = 3000,  -- Neutral
+    [5] = 6000,  -- Friendly
+    [6] = 12000, -- Honored
+    [7] = 21000, -- Revered
+    [8] = 999,   -- Exalted (doesn't overflow, but used as cap marker)
+}
+
+-- @param factionID      number
+-- @param targetStanding number (8 = Exalted)
+-- @param targetRenown   number or nil
+-- @return repPointsRemaining (number), renownPointsRemaining (number or nil)
+function FB.ProgressResolver:GetRepPointsRemaining(factionID, targetStanding, targetRenown)
+    if not factionID then return nil, nil end
+    targetStanding = targetStanding or 8
+
+    -- Try modern API
+    if C_Reputation and C_Reputation.GetFactionDataByID then
+        local ok, data = pcall(C_Reputation.GetFactionDataByID, factionID)
+        if ok and data then
+            -- Renown-based factions
+            if data.isRenownReputation or data.renownLevel then
+                if C_MajorFactions and C_MajorFactions.GetMajorFactionData then
+                    local mOk, majorData = pcall(C_MajorFactions.GetMajorFactionData, factionID)
+                    if mOk and majorData then
+                        local currentRenown = majorData.renownLevel or 0
+                        local goalRenown = targetRenown or majorData.maxRenownLevel or 40
+                        if goalRenown > 200 then goalRenown = 40 end
+                        if currentRenown >= goalRenown then return 0, 0 end
+
+                        local threshold = majorData.renownLevelThreshold or 2500
+                        local earned = majorData.renownReputationEarned or 0
+                        local remainingLevels = goalRenown - currentRenown - 1
+                        local pointsRemaining = math.max(0, remainingLevels * threshold + (threshold - earned))
+                        return nil, pointsRemaining
+                    end
+                end
+            end
+
+            -- Traditional rep
+            local currentReaction = data.reaction or 4
+            if currentReaction >= targetStanding then return 0, nil end
+
+            local currentInTier = 0
+            local tierMax = STANDING_TIER_SIZES[currentReaction] or 3000
+            if data.currentReactionThreshold and data.nextReactionThreshold
+               and data.nextReactionThreshold > data.currentReactionThreshold then
+                tierMax = data.nextReactionThreshold - data.currentReactionThreshold
+                currentInTier = (data.currentStanding or 0) - data.currentReactionThreshold
+            end
+
+            -- Sum remaining tiers
+            local remaining = math.max(0, tierMax - currentInTier)
+            for standing = currentReaction + 2, targetStanding do
+                remaining = remaining + (STANDING_TIER_SIZES[standing] or 3000)
+            end
+            return remaining, nil
+        end
+    end
+
+    return nil, nil
 end
 
 -- Get remaining criteria count for an achievement
