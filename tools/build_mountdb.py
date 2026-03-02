@@ -43,6 +43,8 @@ BLIZZARD_REGION = os.getenv("BLIZZARD_REGION", "eu")
 CACHE_DIR = Path(__file__).parent / ".cache"
 OUTPUT_FILE = Path(__file__).parent.parent / "FarmBuddy" / "Data" / "MountDB_Generated.lua"
 
+WOWHEAD_TOOLTIP_URL = "https://nether.wowhead.com/tooltip/spell/{spell_id}"
+
 # Rarity addon mount DB files on GitHub (raw)
 RARITY_BASE_URL = "https://raw.githubusercontent.com/WowRarity/Rarity/master/DB/Mounts"
 RARITY_FILES = [
@@ -754,21 +756,112 @@ CURATED_OVERRIDES = {
     471696:  {"sourceType": "world_drop",  "expansion": "TWW"},   # Hooktalon
     1250578: {"sourceType": "world_drop",  "expansion": "TWW"},   # Phase-Lost Slateback
 
-    # --- MIDNIGHT mounts (spell IDs 1218xxx+) ---
-    1218229: {"expansion": "MIDNIGHT"},   # Void-Scarred Gryphon
-    1218305: {"expansion": "MIDNIGHT"},   # Void-Forged Stallion
-    1218306: {"expansion": "MIDNIGHT"},   # Void-Scarred Pack Mother
-    1218307: {"expansion": "MIDNIGHT"},   # Void-Scarred Windrider
-    1241070: {"expansion": "MIDNIGHT"},   # Translocated Gorger
-    1253938: {"expansion": "MIDNIGHT"},   # Ruddy Sporeglider
-    1260354: {"expansion": "MIDNIGHT"},   # Untainted Grove Crawler
-    1260356: {"expansion": "MIDNIGHT"},   # Echo of Aln'sharan
-    1261332: {"expansion": "MIDNIGHT"},   # Duskbrute Harrower
-    1261360: {"expansion": "MIDNIGHT"},   # Ancestral War Bear
-    1261576: {"expansion": "MIDNIGHT"},   # Hexed Vilefeather Eagle
-    1261583: {"expansion": "MIDNIGHT"},   # Insatiable Shredclaw
-    1261668: {"expansion": "MIDNIGHT"},   # Bronze Wilderling
-    1261671: {"expansion": "MIDNIGHT"},   # Bronze Aquilon
+    # --- MIDNIGHT / TWW reclassified mounts ---
+    1218229: {  # Void-Scarred Gryphon
+        "sourceType": "quest_chain", "expansion": "TWW", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 15, "dropChance": 1.0,
+        "steps": ["Enter Horrific Vision of Stormwind with at least 2 masks",
+                  "Read the two clue notes in Trade District",
+                  "Place the correct food in the Claw Marked Bowl",
+                  "Defeat the Void-Scarred Gryphon and loot the mount"],
+    },
+    1218305: {  # Void-Forged Stallion
+        "sourceType": "quest_chain", "expansion": "TWW", "timeGate": "weekly",
+        "groupRequirement": "solo", "timePerAttempt": 15, "dropChance": 1.0,
+        "steps": ["Enter Horrific Vision of Stormwind with at least 1 mask",
+                  "Collect 4 cursed horseshoes across Cathedral, Mage Quarter, Trade District, Old Town",
+                  "Use the forge in Dwarven District to summon the rare",
+                  "Defeat and loot the Void-Forged Stallion"],
+    },
+    1218306: {  # Void-Scarred Pack Mother
+        "sourceType": "quest_chain", "expansion": "TWW", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 15, "dropChance": 1.0,
+        "steps": ["Enter Horrific Vision of Orgrimmar with at least 1 mask",
+                  "Collect Worn Wolf Saddle, Bag of Wolf Tack, and Wolf Skin Rug",
+                  "Interact with Wolf Skin Rug in The Drag to spawn the rare",
+                  "Defeat the Void-Scarred Wolf and loot the mount"],
+    },
+    1218307: {  # Void-Scarred Windrider
+        "sourceType": "quest_chain", "expansion": "TWW", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 20, "dropChance": 1.0,
+        "steps": ["Enter Horrific Vision of Orgrimmar with at least 2 masks",
+                  "Clear to Valley of Wisdom and defeat the area boss",
+                  "Navigate to the Wind Rider area south of the elevator",
+                  "Defeat wyvern waves and the Void-Scarred Wyvern Matriarch"],
+    },
+    1241070: {  # Translocated Gorger
+        "sourceType": "currency_grind", "expansion": "TWW", "timeGate": "weekly",
+        "groupRequirement": "small", "timePerAttempt": 30, "dropChance": 1.0,
+        "steps": ["Travel to K'aresh and participate in Devourer Invasion events",
+                  "Defeat 4 unique rare bosses for 4 Devoured Energy-Pods per week",
+                  "Collect 20 Devoured Energy-Pods over 5 weeks minimum",
+                  "Combine pods to create the Translocated Gorger mount"],
+    },
+    1253938: {  # Ruddy Sporeglider
+        "sourceType": "currency_grind", "expansion": "MIDNIGHT", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 90, "dropChance": 1.0,
+        "steps": ["Farm Flame-Hardened Sap nodes in Fungara Village, Harandar",
+                  "Collect 150 Crystallized Resin Fragments",
+                  "Purchase Ruddy Sporeglider from vendor"],
+    },
+    1260354: {  # Untainted Grove Crawler
+        "sourceType": "quest_chain", "expansion": "MIDNIGHT", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 5, "dropChance": 1.0,
+        "steps": ["Pick up the Fungal Mallet in Fungara Village, Harandar",
+                  "Ring the Mycelium Gong (buff is temporary, go quickly)",
+                  "Loot the Sporespawned Cache"],
+    },
+    1260356: {  # Echo of Aln'sharan
+        "sourceType": "quest_chain", "expansion": "MIDNIGHT", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 180, "dropChance": 1.0,
+        "steps": ["Complete the prerequisite quest chain in Harandar",
+                  "Farm 500 Mysterious Skyshards from mobs in Harandar",
+                  "Turn in skyshards to receive the mount"],
+    },
+    1261332: {  # Duskbrute Harrower
+        "sourceType": "reputation", "expansion": "MIDNIGHT", "timeGate": "weekly",
+        "groupRequirement": "solo", "timePerAttempt": 30,
+        "steps": ["Reach Paragon with the Slayer's Duellum faction",
+                  "Complete PvP world quests and activities for reputation",
+                  "Open Paragon cache for a chance at the mount"],
+    },
+    1261360: {  # Ancestral War Bear
+        "sourceType": "quest_chain", "expansion": "MIDNIGHT", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 10, "dropChance": 1.0,
+        "steps": ["Defeat 4 warriors at Loa temples in Zul'Aman",
+                  "Collect the Honor Tokens from each warrior",
+                  "Open the Honored Warrior's Cache for the mount"],
+    },
+    1261576: {  # Hexed Vilefeather Eagle
+        "sourceType": "currency_grind", "expansion": "MIDNIGHT", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 600, "dropChance": 1.0,
+        "steps": ["Farm mobs in Maisara Deeps for Vile Essence",
+                  "Collect 1000 Vile Essence",
+                  "Use the Abandoned Ritual Skull to summon and claim the mount"],
+    },
+    1261583: {  # Insatiable Shredclaw
+        "sourceType": "quest_chain", "expansion": "MIDNIGHT", "timeGate": "none",
+        "groupRequirement": "solo", "timePerAttempt": 10, "dropChance": 1.0,
+        "steps": ["Enter the maze mini-game in Voidstorm",
+                  "Navigate the maze without spells, avoid lightning",
+                  "Loot the Final Clutch of Predaxas at the end"],
+    },
+    1261668: {  # Bronze Wilderling
+        "sourceType": "event", "expansion": "TWW", "timeGate": "weekly",
+        "groupRequirement": "small", "timePerAttempt": 60, "dropChance": 1.0,
+        "steps": ["Complete 4 Timewalking dungeons to earn Mastery of Timeways buff",
+                  "Maintain the buff for 5 separate weeks",
+                  "Complete Master of the Turbulent Timeways IV achievement",
+                  "Choose Bronze Wilderling from Ta'readon's Mount Voucher"],
+    },
+    1261671: {  # Bronze Aquilon
+        "sourceType": "event", "expansion": "TWW", "timeGate": "weekly",
+        "groupRequirement": "small", "timePerAttempt": 60, "dropChance": 1.0,
+        "steps": ["Complete 4 Timewalking dungeons to earn Mastery of Timeways buff",
+                  "Maintain the buff for 5 separate weeks",
+                  "Complete Master of the Turbulent Timeways IV achievement",
+                  "Choose Bronze Aquilon from voucher or buy for 5000 Timewarped Badges"],
+    },
     1263635: {"expansion": "MIDNIGHT"},   # Spectral Hawkstrider
 
     # --- WOD world drops ---
@@ -1410,6 +1503,156 @@ def fetch_rarity_stats():
 
 
 # ---------------------------------------------------------------------------
+# Source 5: Wowhead Tooltip Enrichment
+# ---------------------------------------------------------------------------
+
+def parse_wowhead_source(tooltip_html):
+    """Parse Wowhead tooltip HTML to extract source information."""
+    if not tooltip_html:
+        return {}
+
+    result = {}
+
+    # Extract zone from tooltip (appears in "Zone: X" pattern or location references)
+    zone_match = re.search(r'(?:Zone|Location):\s*([^<]+)', tooltip_html)
+    if zone_match:
+        result["zone"] = zone_match.group(1).strip()
+
+    # Extract NPC/boss name from "Dropped by: X" or "Source: X"
+    source_match = re.search(r'(?:Dropped by|Source):\s*([^<]+)', tooltip_html)
+    if source_match:
+        result["sourceName"] = source_match.group(1).strip()
+
+    # Check for quest-related keywords
+    if any(kw in tooltip_html.lower() for kw in ["quest", "complete", "chain"]):
+        result["sourceHint"] = "quest"
+    elif any(kw in tooltip_html.lower() for kw in ["vendor", "sold by", "purchase"]):
+        result["sourceHint"] = "vendor"
+    elif any(kw in tooltip_html.lower() for kw in ["treasure", "chest", "loot"]):
+        result["sourceHint"] = "treasure"
+
+    return result
+
+
+def fetch_wowhead_tooltips(mounts_to_enrich):
+    """Fetch Wowhead tooltip data for mounts needing enrichment.
+
+    Args:
+        mounts_to_enrich: dict of spell_id -> mount entry (from wago) for mounts that need enrichment
+
+    Returns:
+        dict of spell_id -> parsed source info
+    """
+    print(f"\n[5/5] Fetching Wowhead tooltips for {len(mounts_to_enrich)} mounts...")
+    cache_dir = CACHE_DIR / "wowhead_tooltips"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    results = {}
+    fetched = 0
+    cached_count = 0
+    errors = 0
+
+    for i, spell_id in enumerate(mounts_to_enrich):
+        cache_file = cache_dir / f"{spell_id}.json"
+
+        if cache_file.exists() and (time.time() - cache_file.stat().st_mtime) < 7 * 24 * 3600:
+            try:
+                data = json.loads(cache_file.read_text(encoding="utf-8"))
+                cached_count += 1
+            except (json.JSONDecodeError, OSError):
+                data = None
+        else:
+            data = None
+
+        if data is None:
+            try:
+                resp = requests.get(
+                    WOWHEAD_TOOLTIP_URL.format(spell_id=spell_id),
+                    timeout=15,
+                    headers={"User-Agent": "FarmBuddy-BuildScript/1.0"},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    cache_file.write_text(json.dumps(data), encoding="utf-8")
+                    fetched += 1
+                elif resp.status_code == 429:
+                    print(f"  Rate limited at {i}, waiting 5s...")
+                    time.sleep(5)
+                    resp = requests.get(
+                        WOWHEAD_TOOLTIP_URL.format(spell_id=spell_id),
+                        timeout=15,
+                        headers={"User-Agent": "FarmBuddy-BuildScript/1.0"},
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        cache_file.write_text(json.dumps(data), encoding="utf-8")
+                        fetched += 1
+                else:
+                    errors += 1
+                    data = {}
+
+                # Rate limit: 2 req/sec
+                time.sleep(0.5)
+            except Exception as e:
+                if (i + 1) % 50 == 0:
+                    print(f"  Error fetching spell {spell_id}: {e}")
+                errors += 1
+                data = {}
+
+        if data:
+            tooltip_html = data.get("tooltip", "")
+            source_info = parse_wowhead_source(tooltip_html)
+            if source_info:
+                results[spell_id] = source_info
+
+        if (i + 1) % 100 == 0:
+            print(f"  Processed {i + 1}/{len(mounts_to_enrich)} (fetched: {fetched}, cached: {cached_count})...")
+
+    print(f"  Wowhead: {len(results)} mounts with source info (fetched: {fetched}, cached: {cached_count}, errors: {errors})")
+    return results
+
+
+def select_mounts_for_wowhead(wago_mounts, rarity_data, blizzard_by_name):
+    """Select mounts that would benefit from Wowhead tooltip enrichment.
+
+    Returns list of spell_ids to fetch.
+    """
+    spell_ids = []
+    recent_expansions = {"MIDNIGHT", "TWW", "DF", "SL"}
+
+    for spell_id, wago in wago_mounts.items():
+        # Skip if already in curated overrides with steps
+        if spell_id in CURATED_OVERRIDES and "steps" in CURATED_OVERRIDES[spell_id]:
+            continue
+
+        # Get current best source type
+        rarity = rarity_data.get(spell_id)
+        blizz = blizzard_by_name.get(wago["name"].lower(), {})
+        source_type = None
+        if rarity:
+            source_type = rarity.get("sourceType")
+        if not source_type or source_type == "unknown":
+            source_type = blizz.get("sourceType", "unknown")
+
+        # Suspicious: raid_drop or world_drop with unknown details
+        if source_type in ("raid_drop", "world_drop", "unknown"):
+            spell_ids.append(spell_id)
+            continue
+
+        # Recent expansion mounts missing detailed data
+        expansion = None
+        if rarity:
+            expansion = rarity.get("expansion")
+        if not expansion:
+            expansion = guess_expansion_from_spell_id(spell_id)
+
+        if expansion in recent_expansions:
+            spell_ids.append(spell_id)
+
+    return spell_ids
+
+
+# ---------------------------------------------------------------------------
 # Reference: InstanceData.lua  (Step 6)
 # ---------------------------------------------------------------------------
 
@@ -1438,6 +1681,330 @@ def parse_instance_data():
 
     print(f"  Parsed {len(instances)} instances from InstanceData.lua")
     return instances
+
+
+# ---------------------------------------------------------------------------
+# Steps Generation Helpers
+# ---------------------------------------------------------------------------
+
+def strip_wow_colors(text):
+    """Strip WoW color codes and formatting from text.
+
+    Removes: |cFFxxxxxx, |r, |n, |Tsize:icon|t, |Hlink|h, |h
+    """
+    if not text:
+        return ""
+    # Remove texture tags |Tsize:path|t
+    text = re.sub(r'\|T[^|]*\|t', '', text)
+    # Remove hyperlinks |Htype:data|h and closing |h
+    text = re.sub(r'\|H[^|]*\|h', '', text)
+    text = text.replace('|h', '')
+    # Remove color codes |cFFxxxxxx and |r
+    text = re.sub(r'\|c[0-9A-Fa-f]{8}', '', text)
+    text = text.replace('|r', '')
+    # Replace |n with newline
+    text = text.replace('|n', '\n')
+    # Clean up extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def parse_wago_source_text(source_text):
+    """Parse structured data from wago sourceText.
+
+    Common formats:
+    - "Vendor: Name\\nZone: Place\\nCost: X gold"
+    - "Drop: Boss Name\\nZone: Instance"
+    - "Quest: Quest Name\\nZone: Place"
+    - "World Event: Event Name"
+    """
+    clean = strip_wow_colors(source_text)
+    if not clean:
+        return {}
+
+    result = {"raw": clean}
+
+    # Parse key: value pairs separated by newlines
+    for line in clean.split('\n'):
+        line = line.strip()
+        if ':' in line:
+            key, _, value = line.partition(':')
+            key = key.strip().lower()
+            value = value.strip()
+            if key in ("vendor", "sold by"):
+                result["vendor"] = value
+            elif key == "zone":
+                result["zone"] = value
+            elif key in ("cost", "price"):
+                result["cost"] = value
+            elif key == "quest":
+                result["quest"] = value
+            elif key in ("drop", "dropped by"):
+                result["boss"] = value
+            elif key == "world event":
+                result["event"] = value
+            elif key == "reputation":
+                result["reputation"] = value
+            elif key == "profession":
+                result["profession"] = value
+
+    return result
+
+
+def _format_drop_chance(dc):
+    """Format drop chance as a readable string."""
+    if dc is None:
+        return "unknown drop chance"
+    if dc >= 1.0:
+        return "guaranteed drop"
+    pct = dc * 100
+    if pct >= 1:
+        return f"{pct:.0f}% drop chance"
+    elif pct >= 0.1:
+        return f"{pct:.1f}% drop chance"
+    else:
+        return f"{pct:.2f}% drop chance"
+
+
+def _format_difficulty(diff_id):
+    """Format difficultyID as a readable difficulty string."""
+    diff_names = {
+        2: "Heroic", 3: "10-player Normal", 4: "25-player Normal",
+        5: "10-player Heroic", 6: "25-player Heroic",
+        14: "Normal", 15: "Heroic", 16: "Mythic", 17: "LFR",
+        23: "Mythic", 24: "Timewalking",
+    }
+    return diff_names.get(diff_id, "")
+
+
+def _steps_for_quest(entry, parsed, wh):
+    zone = parsed.get("zone") or wh.get("zone") or ""
+    quest = parsed.get("quest", "")
+    steps = []
+    if quest:
+        steps.append(f"Complete the quest: {quest}")
+    elif zone:
+        steps.append(f"Complete the quest chain in {zone}")
+    else:
+        steps.append("Complete the associated quest chain")
+    steps.append("Mount is a guaranteed reward upon completion")
+    return steps
+
+
+def _steps_for_achievement(entry, achievement_name_map):
+    ach_id = entry.get("achievementID")
+    if ach_id and achievement_name_map.get(ach_id):
+        ach_name = achievement_name_map[ach_id]
+        return [
+            f"Complete the achievement: {ach_name}",
+            "Mount is awarded automatically upon completion",
+        ]
+    return [
+        "Complete the associated achievement",
+        "Mount is awarded automatically upon completion",
+    ]
+
+
+def _steps_for_instance_drop(entry, parsed, wh):
+    instance = entry.get("lockoutInstanceName", "")
+    boss = entry.get("lockBossName") or parsed.get("boss") or wh.get("sourceName") or ""
+    dc = entry.get("dropChance")
+    diff_id = entry.get("difficultyID")
+    dc_str = _format_drop_chance(dc)
+    diff_str = _format_difficulty(diff_id)
+
+    steps = []
+    if instance:
+        enter_str = f"Enter {instance}"
+        if diff_str:
+            enter_str += f" on {diff_str}"
+        steps.append(enter_str)
+    else:
+        steps.append("Enter the instance")
+
+    if boss:
+        steps.append(f"Defeat {boss} - {dc_str}")
+    else:
+        if entry.get("sourceType") == "dungeon_drop":
+            steps.append(f"Defeat the final boss - {dc_str}")
+        else:
+            steps.append(f"Defeat the boss - {dc_str}")
+
+    return steps
+
+
+def _steps_for_world_drop(entry, parsed, wh):
+    zone = parsed.get("zone") or wh.get("zone") or ""
+    source_name = parsed.get("boss") or wh.get("sourceName") or ""
+    dc = entry.get("dropChance")
+    dc_str = _format_drop_chance(dc)
+
+    steps = []
+    if source_name and zone:
+        steps.append(f"Find {source_name} in {zone}")
+    elif source_name:
+        steps.append(f"Find and defeat {source_name}")
+    elif zone:
+        steps.append(f"Farm rare mobs in {zone}")
+    else:
+        steps.append("Farm the rare mob or complete the required activity")
+
+    steps.append(f"Loot the mount - {dc_str}")
+    return steps
+
+
+def _steps_for_vendor(entry, parsed, wh):
+    vendor = parsed.get("vendor", "")
+    zone = parsed.get("zone") or wh.get("zone") or ""
+    cost = parsed.get("cost", "")
+
+    steps = []
+    if vendor and zone:
+        steps.append(f"Visit {vendor} in {zone}")
+    elif vendor:
+        steps.append(f"Purchase from {vendor}")
+    elif zone:
+        steps.append(f"Visit the vendor in {zone}")
+    else:
+        steps.append("Purchase from the appropriate vendor")
+
+    if cost:
+        steps.append(f"Cost: {cost}")
+
+    return steps
+
+
+def _steps_for_reputation(entry, parsed, wh):
+    rep = parsed.get("reputation", "")
+    zone = parsed.get("zone") or wh.get("zone") or ""
+
+    steps = []
+    if rep:
+        steps.append(f"Reach required reputation with {rep}")
+    else:
+        steps.append("Reach the required reputation level")
+
+    if zone:
+        steps.append(f"Purchase from the reputation vendor in {zone}")
+    else:
+        steps.append("Purchase from the reputation vendor")
+
+    return steps
+
+
+def _steps_for_event(entry, parsed, wh):
+    event = parsed.get("event") or parsed.get("raw", "")
+
+    steps = []
+    if event and len(event) < 80:
+        steps.append(f"Participate in {event}")
+    else:
+        steps.append("Participate in the associated world event")
+    steps.append("Complete event objectives to earn the mount")
+    return steps
+
+
+def _steps_for_profession(entry, parsed):
+    prof = parsed.get("profession", "")
+
+    steps = []
+    if prof:
+        steps.append(f"Requires {prof}")
+    else:
+        steps.append("Requires the appropriate profession skill")
+    steps.append("Craft or obtain through profession activities")
+    return steps
+
+
+def _steps_for_currency(entry, parsed, wh):
+    cost = parsed.get("cost", "")
+    zone = parsed.get("zone") or wh.get("zone") or ""
+
+    steps = []
+    if zone:
+        steps.append(f"Farm currency in {zone}")
+    else:
+        steps.append("Farm the required currency")
+
+    if cost:
+        steps.append(f"Collect {cost}")
+
+    steps.append("Purchase or turn in currency for the mount")
+    return steps
+
+
+def _steps_for_pvp(entry, parsed):
+    steps = [
+        "Earn a Vicious Saddle through rated PvP (Arena or RBG wins)",
+        "Purchase from the Vicious Saddle vendor",
+    ]
+    return steps
+
+
+def generate_steps(entry, wago_entry, wowhead_data, achievement_name_map):
+    """Generate human-readable acquisition steps from all available data.
+
+    Args:
+        entry: merged mount entry
+        wago_entry: raw wago data for this mount
+        wowhead_data: parsed Wowhead tooltip info (or None)
+        achievement_name_map: dict of achievement_id -> achievement_name
+
+    Returns:
+        list of step strings, or None if we can't generate useful steps
+    """
+    src = entry.get("sourceType", "unknown")
+    source_text = (wago_entry or {}).get("sourceText", "")
+    parsed = parse_wago_source_text(source_text)
+    wh = wowhead_data or {}
+
+    if src == "quest_chain":
+        return _steps_for_quest(entry, parsed, wh)
+    elif src == "achievement":
+        return _steps_for_achievement(entry, achievement_name_map)
+    elif src in ("raid_drop", "dungeon_drop"):
+        return _steps_for_instance_drop(entry, parsed, wh)
+    elif src == "world_drop":
+        return _steps_for_world_drop(entry, parsed, wh)
+    elif src == "vendor":
+        return _steps_for_vendor(entry, parsed, wh)
+    elif src == "reputation":
+        return _steps_for_reputation(entry, parsed, wh)
+    elif src == "event":
+        return _steps_for_event(entry, parsed, wh)
+    elif src == "profession":
+        return _steps_for_profession(entry, parsed)
+    elif src == "currency_grind":
+        return _steps_for_currency(entry, parsed, wh)
+    elif src == "pvp":
+        return _steps_for_pvp(entry, parsed)
+    return None
+
+
+def build_achievement_name_map():
+    """Build a reverse map from achievement_id -> achievement_name.
+
+    Uses the cached wago Achievement DB2 CSV.
+    """
+    cache_file = CACHE_DIR / "wago_achievement.csv"
+    if not cache_file.exists():
+        return {}
+
+    csv_text = cache_file.read_text(encoding="utf-8")
+    name_map = {}
+
+    reader = csv.DictReader(io.StringIO(csv_text))
+    for row in reader:
+        aid_str = row.get("ID", "").strip()
+        name = row.get("Title_lang", "") or row.get("Description_lang", "")
+        name = name.strip()
+        if aid_str and name:
+            try:
+                name_map[int(aid_str)] = name
+            except ValueError:
+                pass
+
+    return name_map
 
 
 # ---------------------------------------------------------------------------
@@ -1566,7 +2133,8 @@ def derive_difficulty_id(difficulties, expansion, mythic_only=False):
 # ---------------------------------------------------------------------------
 
 def merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
-               resolved_achievements, instance_data, achievement_reward_map=None):
+               resolved_achievements, instance_data, achievement_reward_map=None,
+               wowhead_results=None, achievement_name_map=None):
     """Merge all sources into a unified mount database."""
     print("\n[Merge] Combining all sources...")
     # Unpack achievement reward maps for fallback name-based lookup
@@ -1749,6 +2317,15 @@ def merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
             wago.get("sourceText", ""),
         )
 
+        # ---- Cross-reference Wowhead tooltip for source type corrections ----
+        wh = (wowhead_results or {}).get(spell_id, {})
+        source_hint = wh.get("sourceHint")
+        if source_hint and entry.get("sourceType") in ("raid_drop", "world_drop", "unknown"):
+            if source_hint == "quest" and entry["sourceType"] != "quest_chain":
+                entry["sourceType"] = "quest_chain"
+            elif source_hint == "vendor" and entry["sourceType"] != "vendor":
+                entry["sourceType"] = "vendor"
+
         # ---- Derived fields ----
         src = entry.get("sourceType", "unknown")
         exp = entry.get("expansion")
@@ -1766,6 +2343,11 @@ def merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
         entry["timeGate"] = get_time_gate(src, exp)
         entry["groupRequirement"] = get_group_requirement(src, exp)
 
+        # Quest chain and currency grind rewards are guaranteed unless already set
+        if entry.get("sourceType") in ("quest_chain", "currency_grind") and not entry.get("dropChance"):
+            entry["dropChance"] = 1.0
+            entry["expectedAttempts"] = 1
+
         # Bug 3 fix: Use median formula for expectedAttempts (matches ScoringEngine).
         # Median = ceil(log(0.5) / log(1 - p)), not mean (1/p).
         dc = entry.get("dropChance")
@@ -1775,6 +2357,13 @@ def merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
             )
         elif dc and dc >= 1.0:
             entry["expectedAttempts"] = 1
+
+        # Generate steps if not already present from curated overrides
+        if not entry.get("steps"):
+            wh_entry = (wowhead_results or {}).get(spell_id, {})
+            auto_steps = generate_steps(entry, wago, wh_entry, achievement_name_map or {})
+            if auto_steps:
+                entry["steps"] = auto_steps
 
         # Skip mounts with no useful data
         if entry.get("sourceType") in ("unknown", "promotion", "trading_post"):
@@ -1946,6 +2535,18 @@ def generate_lua(merged, output_path):
             maps_str = ", ".join(str(m) for m in map_ids)
             lines.append(f"    mapIDs = {{ {maps_str} }},")
 
+        # steps (acquisition guide)
+        steps = entry.get("steps")
+        if steps:
+            if len(steps) <= 2:
+                steps_strs = ', '.join(f'"{s}"' for s in steps)
+                lines.append(f"    steps = {{ {steps_strs} }},")
+            else:
+                lines.append("    steps = {")
+                for s in steps:
+                    lines.append(f'        "{s}",')
+                lines.append("    },")
+
         # shouldExclude
         if entry.get("shouldExclude"):
             lines.append("    shouldExclude = true,")
@@ -1989,6 +2590,7 @@ def print_quality_report(merged):
         ("lockoutInstanceName", lambda e: e.get("lockoutInstanceName") is not None),
         ("difficultyID", lambda e: e.get("difficultyID") is not None),
         ("mapIDs", lambda e: bool(e.get("mapIDs"))),
+        ("steps", lambda e: bool(e.get("steps"))),
     ]
 
     print(f"\n{'Field':<25} {'Count':>6} {'%':>6}")
@@ -2035,6 +2637,14 @@ def print_quality_report(merged):
         for st, cnt in sorted(by_type.items(), key=lambda x: -x[1]):
             print(f"  {st}: {cnt}")
 
+    # Steps coverage by sourceType
+    print(f"\n--- Steps Coverage (farmable mounts) ---")
+    for st in sorted(set(e.get("sourceType", "unknown") for e in farmable.values())):
+        type_mounts = [e for e in farmable.values() if e.get("sourceType") == st]
+        with_steps = [e for e in type_mounts if e.get("steps")]
+        if type_mounts:
+            print(f"  {st}: {len(with_steps)}/{len(type_mounts)} ({100*len(with_steps)/len(type_mounts):.0f}%)")
+
 
 # ---------------------------------------------------------------------------
 # Main
@@ -2061,6 +2671,18 @@ def main():
     # Source 4: Data for Azeroth
     rarity_stats = fetch_rarity_stats()
 
+    # Build Blizzard lookup by name for wowhead selection
+    blizzard_by_name = {}
+    for mid, data in blizzard_data.items():
+        blizzard_by_name[data["name"].lower()] = data
+
+    # Source 5: Wowhead tooltips (selective enrichment)
+    wowhead_spell_ids = select_mounts_for_wowhead(wago_mounts, rarity_data, blizzard_by_name)
+    wowhead_results = fetch_wowhead_tooltips(wowhead_spell_ids)
+
+    # Build achievement name map for steps generation
+    achievement_name_map = build_achievement_name_map()
+
     # Reference: InstanceData.lua (Step 6)
     instance_data = parse_instance_data()
 
@@ -2070,7 +2692,9 @@ def main():
     # Merge (Steps 5-9)
     merged = merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
                         resolved_achievements, instance_data,
-                        achievement_reward_map=achievement_reward_map)
+                        achievement_reward_map=achievement_reward_map,
+                        wowhead_results=wowhead_results,
+                        achievement_name_map=achievement_name_map)
 
     # Generate Lua (Step 9)
     generate_lua(merged, OUTPUT_FILE)
