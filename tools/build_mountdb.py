@@ -41,7 +41,7 @@ BLIZZARD_CLIENT_SECRET = os.getenv("BLIZZARD_CLIENT_SECRET", "")
 BLIZZARD_REGION = os.getenv("BLIZZARD_REGION", "eu")
 
 CACHE_DIR = Path(__file__).parent / ".cache"
-OUTPUT_FILE = Path(__file__).parent.parent / "Data" / "MountDB_Generated.lua"
+OUTPUT_FILE = Path(__file__).parent.parent / "FarmBuddy" / "Data" / "MountDB_Generated.lua"
 
 # Rarity addon mount DB files on GitHub (raw)
 RARITY_BASE_URL = "https://raw.githubusercontent.com/WowRarity/Rarity/master/DB/Mounts"
