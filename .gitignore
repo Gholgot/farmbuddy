@@ -1,3 +1,6 @@
+tools/.cache/
+.claude/
+
 # Compiled Lua sources
 luac.out
 
