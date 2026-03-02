@@ -2585,12 +2585,14 @@ def generate_lua(merged, output_path):
         # steps (acquisition guide)
         steps = entry.get("steps")
         if steps:
-            if len(steps) <= 2:
-                steps_strs = ', '.join(f'"{s}"' for s in steps)
+            # Escape double quotes and backslashes for Lua string safety
+            safe = [s.replace('\\', '\\\\').replace('"', '\\"') for s in steps]
+            if len(safe) <= 2:
+                steps_strs = ', '.join(f'"{s}"' for s in safe)
                 lines.append(f"    steps = {{ {steps_strs} }},")
             else:
                 lines.append("    steps = {")
-                for s in steps:
+                for s in safe:
                     lines.append(f'        "{s}",')
                 lines.append("    },")
 
