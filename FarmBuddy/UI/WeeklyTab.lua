@@ -552,6 +552,7 @@ end
 
 -- Render the filtered data to the grid
 function FB.UI.WeeklyTab:RenderGrid()
+    if not scrollFrame or not gridFrame then return end
     ReleaseAll()
 
     local characters = FB.WeeklyTracker:GetCharacterList()
@@ -672,7 +673,7 @@ function FB.UI.WeeklyTab:RenderGrid()
             SetRowHighlight(rHighlights, true)
             -- Mount name tooltip
             GameTooltip:SetOwner(self2, "ANCHOR_RIGHT")
-            GameTooltip:SetText(mt.name or "Unknown Mount", 1, 0.82, 0, true)
+            GameTooltip:SetText(mt.name or "Unknown Mount", 1, 0.82, 0)
             local src = mt.instanceName or mt.sourceText or "Unknown Source"
             GameTooltip:AddLine("Source: " .. src, 0.8, 0.8, 0.8, false)
             if mt.dropChance then

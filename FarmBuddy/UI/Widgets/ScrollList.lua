@@ -147,8 +147,8 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
                     widget.onClick(item)
                     widget:SetSelected(self.dataIndex)  -- #7: update selection on click
                 end
-                -- #24: give keyboard focus to the list frame on click
-                frame:SetFocus()
+                -- #24: capture keyboard input on click
+                frame:SetPropagateKeyboardInput(false)
             end
         end)
 

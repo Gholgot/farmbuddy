@@ -115,9 +115,9 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
 
     -- Text label on top of the bar
     local goalText = goalBarFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    goalText:SetAllPoints()
+    goalText:SetPoint("TOPLEFT", 4, 0)
+    goalText:SetPoint("BOTTOMRIGHT", -4, 0)
     goalText:SetJustifyH("LEFT")
-    goalText:SetTextInsets(4, 4, 0, 0)
 
     self.goalBar = goalBarFrame
     self.goalFill = goalFill
@@ -578,7 +578,7 @@ function FB.UI.MountRecommendTab:StartScan()
     self.scanBtn:Disable()
     progressBar:Show()
     filterBar.frame:Hide()
-    scrollList:SetData({})
+    if scrollList then scrollList:SetData({}) end
     scoreBar:SetScore(nil)
     self.detailText:SetText("")
     if self.detailHeader then self.detailHeader:SetText("") end
@@ -626,6 +626,7 @@ function FB.UI.MountRecommendTab:ApplyFilters()
 
     -- Limit results based on maxResults setting
     local maxResults = tonumber(filters.maxResults) or 20
+    if not scrollList then return end
     if maxResults > 0 and #filtered > maxResults then
         local limited = {}
         for i = 1, maxResults do

@@ -327,13 +327,13 @@ local function BuildActivityRows(plan, availableWidth)
         rowFrame:SetScript("OnClick", function(self2)
             GameTooltip:SetOwner(self2, "ANCHOR_RIGHT")
             if act.type == "instance" then
-                GameTooltip:SetText(act.instanceName or "Instance", 1, 0.82, 0, true)
+                GameTooltip:SetText(act.instanceName or "Instance", 1, 0.82, 0)
             else
                 local m = act.mounts[1]
-                GameTooltip:SetText(m and m.name or "Mount", 1, 0.82, 0, true)
+                GameTooltip:SetText(m and m.name or "Mount", 1, 0.82, 0)
             end
             GameTooltip:AddLine(string.format("~%d min | %d mount chance%s",
-                act.timeMinutes, act.mountCount, act.mountCount ~= 1 and "s" or ""), 0.8, 0.8, 0.8, false)
+                act.timeMinutes, act.mountCount, act.mountCount ~= 1 and "s" or ""), 0.8, 0.8, 0.8)
             GameTooltip:AddLine(" ", 1, 1, 1)
             for _, m in ipairs(act.mounts) do
                 local scoreStr = m.score and string.format("[Score: %d]", m.score) or ""
