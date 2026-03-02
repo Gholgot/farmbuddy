@@ -93,12 +93,12 @@ function FB.UI.Widgets:CreateMountDetailPanel(parent, name)
         elseif scoreExpanded then
             scoreToggle:Show()
             scoreBar.frame:Show()
-            scoreArrow:SetText("\226\150\190")  -- ▾
+            scoreArrow:SetText("v")  -- down arrow
             widget.detailScroll:SetPoint("TOPLEFT", scoreBar.frame, "BOTTOMLEFT", 0, -4)
         else
             scoreToggle:Show()
             scoreBar.frame:Hide()
-            scoreArrow:SetText("\226\150\184")  -- ▸
+            scoreArrow:SetText(">")  -- right arrow
             widget.detailScroll:SetPoint("TOPLEFT", scoreToggle, "BOTTOMLEFT", 0, -4)
         end
     end

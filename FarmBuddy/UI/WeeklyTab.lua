@@ -557,6 +557,11 @@ function FB.UI.WeeklyTab:RenderGrid()
     if not scrollFrame or not gridFrame then return end
     ReleaseAll()
 
+    -- Reset scroll position on re-render to prevent items from being invisible
+    scrollFrame:SetVerticalScroll(0)
+    scrollFrame:SetHorizontalScroll(0)
+    if scrollBar then scrollBar:SetValue(0) end
+
     local characters = FB.WeeklyTracker:GetCharacterList()
 
     if #allWeeklyMounts == 0 then

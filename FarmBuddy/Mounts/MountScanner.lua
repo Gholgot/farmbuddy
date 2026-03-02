@@ -332,7 +332,7 @@ function FB.Mounts.Scanner:FilterResults(results, filters)
         if filters.showRaidDrop == false and r.sourceType == "raid_drop" then pass = false end
         if filters.showDungeonDrop == false and r.sourceType == "dungeon_drop" then pass = false end
         if filters.showReputation == false and r.sourceType == "reputation" then pass = false end
-        if filters.showCurrency == false and r.sourceType == "currency" then pass = false end
+        if filters.showCurrency == false and r.sourceType == "currency_grind" then pass = false end
         if filters.showQuestChain == false and r.sourceType == "quest_chain" then pass = false end
         if filters.showEvent == false and r.sourceType == "event" then pass = false end
         if filters.showWorldDrop == false and (r.sourceType == "world_drop" or r.sourceType == "world_boss") then pass = false end
