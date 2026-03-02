@@ -43,6 +43,7 @@ function FB.UI.Widgets:CreateFilterBar(parent, name)
         ["TP"]    = "Trading Post: Monthly Trading Post rewards",
         ["Solo"]  = "Solo Only: Show only mounts farmable alone",
         ["Avail"] = "Available Now: Show only currently unlocked mounts",
+        ["RAF"]   = "Recruit-A-Friend: Mounts tied to the Recruit-A-Friend program",
     }
 
     -- Add a checkbox filter

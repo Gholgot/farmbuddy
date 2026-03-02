@@ -107,13 +107,13 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
         -- Name
         row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         row.nameText:SetPoint("LEFT", row.icon, "RIGHT", 6, 6)
-        row.nameText:SetWidth(200)
+        row.nameText:SetWidth(100)
         row.nameText:SetJustifyH("LEFT")
 
         -- Sub text (source info)
         row.subText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.subText:SetPoint("LEFT", row.icon, "RIGHT", 6, -6)
-        row.subText:SetWidth(200)
+        row.subText:SetWidth(100)
         row.subText:SetJustifyH("LEFT")
         row.subText:SetTextColor(0.6, 0.6, 0.6)
 
@@ -243,6 +243,12 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
     function widget:Refresh()
         local visibleRows = GetVisibleRows()
 
+        -- B1: Calculate dynamic text widths from frame width
+        local frameWidth = frame:GetWidth()
+        -- Fixed columns: rank(24) + icon(rowHeight) + score(50) + time(70) + status(70) + gaps(~30)
+        local fixedWidth = 24 + rowHeight + 50 + 70 + 70 + 30
+        local availableTextWidth = math.max(60, (frameWidth - fixedWidth) / 2)
+
         -- Create rows as needed
         while #self.rows < visibleRows do
             self.rows[#self.rows + 1] = CreateRow(#self.rows + 1)
@@ -266,6 +272,10 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
             if dataIdx <= #self.filteredData then
                 local item = self.filteredData[dataIdx]
                 row.dataIndex = dataIdx
+
+                -- B1: Apply dynamic text widths
+                row.nameText:SetWidth(availableTextWidth)
+                row.subText:SetWidth(availableTextWidth)
 
                 row.rank:SetText(FB.COLORS.GRAY .. dataIdx .. "|r")
                 row.icon:SetTexture(item.icon)

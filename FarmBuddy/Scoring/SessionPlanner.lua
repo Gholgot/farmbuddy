@@ -74,18 +74,16 @@ function FB.SessionPlanner:GeneratePlan(results, timeBudget, filters)
 
     for _, group in pairs(instanceGroups) do
         local mountCount = #group.mounts
-        -- MED-6: Use score-weighted density instead of raw mount count.
-        -- Lower score = higher priority mount. Invert scores so higher priority
-        -- contributes more to density. Use (mountCount * avgInvertedScore) / time
-        -- so both quantity and quality factor in — one top-priority mount beats
-        -- many low-priority mounts at the same time cost.
-        local totalInvertedScore = 0
+        -- Use best-mount score as the primary density driver, with a small
+        -- bonus per extra mount (5% each, capped at 50%). This prevents
+        -- 1 great mount + 9 trash from tying with 1 great mount alone.
+        local bestInvertedScore = 0
         for _, m in ipairs(group.mounts) do
-            -- Invert: treat score 0 as maximum value (1000) and cap low inversions
-            totalInvertedScore = totalInvertedScore + math.max(1, 1000 - (m.score or 1000))
+            local inv = math.max(1, 1000 - (m.score or 1000))
+            if inv > bestInvertedScore then bestInvertedScore = inv end
         end
-        local avgInvertedScore = totalInvertedScore / mountCount
-        local density = (mountCount * avgInvertedScore) / math.max(1, group.timePerAttempt)
+        local extraMountBonus = 1 + math.min(0.50, (mountCount - 1) * 0.05)
+        local density = (bestInvertedScore * extraMountBonus) / math.max(1, group.timePerAttempt)
         activities[#activities + 1] = {
             type = "instance",
             instanceName = group.instanceName,
@@ -126,15 +124,24 @@ function FB.SessionPlanner:GeneratePlan(results, timeBudget, filters)
     local plan = {}
     local totalMinutes = 0
     local totalMounts = 0
+    local skipped = {}
 
     for _, activity in ipairs(activities) do
         if totalMinutes + activity.timeMinutes <= timeBudget then
             plan[#plan + 1] = activity
             totalMinutes = totalMinutes + activity.timeMinutes
             totalMounts = totalMounts + activity.mountCount
-        elseif totalMinutes < timeBudget then
-            -- Partial fit: check if there's a smaller activity that fits
-            -- (skip this one and continue looking)
+        else
+            skipped[#skipped + 1] = activity
+        end
+    end
+
+    -- Second pass: try to fill remaining time with skipped activities
+    for _, activity in ipairs(skipped) do
+        if totalMinutes + activity.timeMinutes <= timeBudget then
+            plan[#plan + 1] = activity
+            totalMinutes = totalMinutes + activity.timeMinutes
+            totalMounts = totalMounts + activity.mountCount
         end
     end
 

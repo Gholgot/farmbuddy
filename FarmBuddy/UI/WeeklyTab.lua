@@ -262,8 +262,10 @@ function FB.UI.WeeklyTab:Init(parentPanel)
     clearBtn:SetPoint("RIGHT", refreshBtn, "LEFT", -6, 0)
     clearBtn:SetText("Clear Attempts")
     -- Orange/warning color tint via vertex color
-    clearBtn:GetNormalTexture():SetVertexColor(1.0, 0.65, 0.1)
-    clearBtn:GetHighlightTexture():SetVertexColor(1.0, 0.8, 0.3)
+    local clearNorm = clearBtn:GetNormalTexture()
+    if clearNorm then clearNorm:SetVertexColor(1.0, 0.65, 0.1) end
+    local clearHigh = clearBtn:GetHighlightTexture()
+    if clearHigh then clearHigh:SetVertexColor(1.0, 0.8, 0.3) end
     clearBtn:SetScript("OnClick", function()
         -- Confirmation dialog
         StaticPopupDialogs["FARMBUDDY_CLEAR_ATTEMPTS"] = {
