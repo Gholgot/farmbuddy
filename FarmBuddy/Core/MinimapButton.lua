@@ -42,25 +42,23 @@ function FB.MinimapButton:Create()
     button:SetMovable(true)
     button:SetClampedToScreen(true)
 
-    -- Icon background (circle)
+    -- Icon (positioned to align within the tracking border ring)
     local bg = button:CreateTexture(nil, "BACKGROUND")
-    bg:SetSize(24, 24)
-    bg:SetPoint("CENTER")
+    bg:SetSize(20, 20)
+    bg:SetPoint("TOPLEFT", 7, -5)
     bg:SetTexture("Interface\\Icons\\INV_Misc_Map_01")
     bg:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    -- Border overlay (minimap style ring)
-    -- MiniMap-TrackingBorder must be 56x56 to center correctly around the icon;
-    -- using 54x54 causes the ring to be rendered off-center relative to the icon.
+    -- Border overlay (standard minimap tracking ring, anchored at TOPLEFT)
     local border = button:CreateTexture(nil, "OVERLAY")
-    border:SetSize(56, 56)
-    border:SetPoint("CENTER")
+    border:SetSize(54, 54)
+    border:SetPoint("TOPLEFT")
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
     -- Highlight
     local highlight = button:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetSize(24, 24)
-    highlight:SetPoint("CENTER")
+    highlight:SetSize(20, 20)
+    highlight:SetPoint("TOPLEFT", 7, -5)
     highlight:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
     -- Status text (small count badge)
