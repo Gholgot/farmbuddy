@@ -1176,6 +1176,9 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
             input.sourceType = "reputation"
         elseif input.currencyID and guessedType ~= "currency" and not input.factionID then
             input.sourceType = "currency"
+        elseif input.achievementID and guessedType ~= "achievement"
+               and not input.factionID and not input.currencyID then
+            input.sourceType = "achievement"
         end
 
         -- Recalculate expected attempts based on actual progress
@@ -1392,7 +1395,7 @@ function FB.Mounts.Resolver:GetDefaultsForSourceType(sourceType, expansion)
         pvp              = { timePerAttempt = 20, timeGate = "weekly",  groupRequirement = "small", expectedAttempts = 50,  lockoutScope = "character" },
         event            = { timePerAttempt = 15, timeGate = "yearly",  groupRequirement = "solo",  lockoutScope = "character" },
         vendor           = { timePerAttempt = 5,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 1,   lockoutScope = "character" },
-        trading_post     = { timePerAttempt = 0,  timeGate = "monthly", groupRequirement = "solo",  expectedAttempts = 0,   lockoutScope = "character" },
+        trading_post     = { timePerAttempt = 0,  timeGate = "monthly", groupRequirement = "solo",  expectedAttempts = 1,   lockoutScope = "character" },
         blizzard_shop    = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 0,   lockoutScope = "character" },
         tcg              = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 1,   lockoutScope = "character" },
         recruit_a_friend = { timePerAttempt = 0,  timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 1,   lockoutScope = "character" },

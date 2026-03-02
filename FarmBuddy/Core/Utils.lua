@@ -633,9 +633,9 @@ function FB.Utils:BuildMountAutoSteps(item)
         if pct >= 5 then
             label = string.format("%.0f%% drop chance (decent odds)%s", pct, sourceTag)
         elseif pct >= 1 then
-            label = string.format("%.1f%% drop chance (~%d attempts expected)%s", pct, item.expectedAttempts or math.ceil(1 / item.dropChance), sourceTag)
+            label = string.format("%.1f%% drop chance (~%d attempts expected)%s", pct, item.expectedAttempts or math.ceil(math.log(0.5) / math.log(1 - item.dropChance)), sourceTag)
         else
-            label = string.format("%.2f%% drop chance (~%d attempts expected)%s", pct, item.expectedAttempts or math.ceil(1 / item.dropChance), sourceTag)
+            label = string.format("%.2f%% drop chance (~%d attempts expected)%s", pct, item.expectedAttempts or math.ceil(math.log(0.5) / math.log(1 - item.dropChance)), sourceTag)
         end
         steps[#steps + 1] = label
     elseif DROP_SOURCE_TYPES[item.sourceType] then

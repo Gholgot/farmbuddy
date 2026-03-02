@@ -62,6 +62,7 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     filterBar:AddCheckbox("showProfession", "Prof", true)
     filterBar:AddCheckbox("showPvP", "PvP", true)
     filterBar:AddCheckbox("showTradingPost", "TP", true)
+    filterBar:AddCheckbox("showRAF", "RAF", true)
     filterBar:AddCheckbox("soloOnly", "Solo", false)
     filterBar:AddCheckbox("availableOnly", "Avail", false)
     -- Expansion filter dropdown
@@ -97,8 +98,8 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     -- #25: Goal progress display with inline progress bar
     local goalBarFrame = CreateFrame("Frame", nil, panel)
     goalBarFrame:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", 0, -3)
+    goalBarFrame:SetPoint("RIGHT", filterBar.frame, "RIGHT", 0, 0)
     goalBarFrame:SetHeight(16)
-    goalBarFrame:SetWidth(260)
     goalBarFrame:Hide()
 
     -- Background bar
@@ -132,7 +133,10 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     local leftFrame = CreateFrame("Frame", nil, contentFrame)
     leftFrame:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 0, 0)
     leftFrame:SetPoint("BOTTOM", contentFrame, "BOTTOM", 0, 0)
-    leftFrame:SetWidth(500)
+    leftFrame:SetWidth(math.max(300, contentFrame:GetWidth() * 0.6))
+    contentFrame:SetScript("OnSizeChanged", function(self)
+        leftFrame:SetWidth(math.max(300, self:GetWidth() * 0.6))
+    end)
 
     scrollList = FB.UI.Widgets:CreateScrollList(leftFrame, "FarmBuddyMountRecommendList", 36)
     scrollList.frame:SetAllPoints()
@@ -358,6 +362,7 @@ local BUILT_IN_PRESETS = {
             showReputation = true, showCurrency = true, showQuestChain = true,
             showAchievement = true, showVendor = true, showEvent = true,
             showProfession = true, showPvP = true, showTradingPost = true,
+            showRAF = true,
         },
     },
     {
@@ -367,6 +372,7 @@ local BUILT_IN_PRESETS = {
             showReputation = false, showCurrency = false, showQuestChain = false,
             showAchievement = false, showVendor = false, showEvent = false,
             showProfession = false, showPvP = false, showTradingPost = false,
+            showRAF = false,
             soloOnly = false, availableOnly = false,
         },
     },
@@ -378,6 +384,7 @@ local BUILT_IN_PRESETS = {
             showReputation = false, showCurrency = false, showQuestChain = false,
             showAchievement = false, showVendor = false, showEvent = false,
             showProfession = false, showPvP = false, showTradingPost = false,
+            showRAF = false,
         },
     },
     {
@@ -387,6 +394,7 @@ local BUILT_IN_PRESETS = {
             showReputation = true, showCurrency = true, showQuestChain = false,
             showAchievement = false, showVendor = true, showEvent = false,
             showProfession = false, showPvP = false, showTradingPost = true,
+            showRAF = false,
             soloOnly = false, availableOnly = false,
         },
     },
@@ -397,6 +405,7 @@ local BUILT_IN_PRESETS = {
             showReputation = true, showCurrency = true, showQuestChain = true,
             showAchievement = true, showVendor = true, showEvent = true,
             showProfession = true, showPvP = true, showTradingPost = true,
+            showRAF = true,
             soloOnly = false, availableOnly = false,
         },
     },
@@ -704,7 +713,7 @@ function FB.UI.MountRecommendTab:SelectMount(item)
 
     -- Add diminishing returns info if available
     if item.attemptCount and item.attemptCount > 0 and item.dropChance and item.dropChance > 0 then
-        local expected = math.ceil(1 / item.dropChance)
+        local expected = math.ceil(math.log(0.5) / math.log(1 - item.dropChance))
         extraLines[#extraLines + 1] = ""
         if item.attemptCount > expected then
             local pUnlucky = (1 - item.dropChance) ^ item.attemptCount * 100

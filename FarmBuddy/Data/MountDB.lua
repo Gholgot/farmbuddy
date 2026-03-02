@@ -488,24 +488,6 @@ FB.MountDB.entries = {
     },
 
     -- =====================
-    -- CLASSIC DUNGEON DROPS
-    -- =====================
-    [17481] = { -- Rivendare's Deathcharger (Baron mount, Stratholme)
-        sourceType = "dungeon_drop",
-        expansion = "CLASSIC",
-        timeGate = "none",
-        timePerAttempt = 8,
-        groupRequirement = "solo",
-        dropChance = 0.008,
-        steps = {
-            "Enter Stratholme (Service Entrance side)",
-            "Clear to Baron Rivendare",
-            "Defeat Baron Rivendare - ~0.8% drop",
-            "Farmable: reset instance, 10 runs/hour limit",
-        },
-    },
-
-    -- =====================
     -- TBC DUNGEON & WORLD DROPS
     -- =====================
     [46628] = { -- Swift White Hawkstrider (Kael'thas, MGT)
@@ -690,21 +672,6 @@ FB.MountDB.entries = {
         },
     },
 
-    -- =====================
-    -- LEGION ADDITIONAL
-    -- =====================
-    [213134] = { -- Midnight (original Karazhan - Attumen)
-        sourceType = "dungeon_drop",
-        expansion = "LEGION",
-        timeGate = "none",
-        timePerAttempt = 3,
-        groupRequirement = "solo",
-        dropChance = 0.01,
-        steps = {
-            "Enter Return to Karazhan (lower section)",
-            "Defeat Attumen the Huntsman - ~1% drop chance",
-        },
-    },
     [235764] = { -- Living Infernal Core (Gul'dan Mythic, Nighthold)
         sourceType = "raid_drop",
         expansion = "LEGION",

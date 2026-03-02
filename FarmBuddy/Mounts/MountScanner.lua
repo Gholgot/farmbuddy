@@ -61,12 +61,19 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
             end
 
             -- Enrich with warband availability for time-gated mounts (#1)
-            if input.lockoutInstanceName and input.timeGate == "weekly" and FB.CharacterData
+            if input.lockoutInstanceName and (input.timeGate == "weekly" or input.timeGate == "daily") and FB.CharacterData
                and FB.CharacterData.GetWarbandLockoutStatus then
                 local _, availChars = FB.CharacterData:GetWarbandLockoutStatus(
                     input.lockoutInstanceName, input.difficultyID
                 )
                 input.warbandAvailable = #availChars
+                input.warbandTotal = warbandTotal
+            end
+
+            -- Enrich world bosses without lockoutInstanceName
+            if not input.warbandAvailable and input.sourceType == "world_boss"
+               and input.timeGate == "weekly" and warbandTotal > 1 then
+                input.warbandAvailable = warbandTotal
                 input.warbandTotal = warbandTotal
             end
 
@@ -176,6 +183,10 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                         instanceGroupCount = r.instanceGroupCount,
                         staleDays = r.staleDays,
                         sourceType = r.sourceType,
+                        factionID = r.factionID,
+                        currencyID = r.currencyID,
+                        achievementID = r.achievementID,
+                        goldCost = r.goldCost,
                     }, weights)
                     r.score = rescore.score
                     r.components = rescore.components
@@ -214,7 +225,7 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
             if FB.db and FB.db.mountAttemptCounts then
                 for _, r in ipairs(results) do
                     if r.attemptCount and r.dropChance and r.dropChance > 0 then
-                        local expected = math.ceil(1 / r.dropChance)
+                        local expected = math.ceil(math.log(0.5) / math.log(1 - r.dropChance))
                         if r.attemptCount > expected then
                             local ratio = r.attemptCount / expected
                             local pUnlucky = (1 - r.dropChance) ^ r.attemptCount * 100
@@ -230,6 +241,27 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                             )
                         end
                     end
+                end
+            end
+
+            -- Bad luck score boost: if player is in bottom 10% of luck, apply up to 15% discount
+            for _, r in ipairs(results) do
+                if r.luckPercentile and r.luckPercentile < 10 then
+                    local luckDiscount = math.min(0.15, (10 - r.luckPercentile) / 10 * 0.15)
+                    r.score = r.score * (1 - luckDiscount)
+                end
+            end
+
+            -- Enforce 50% discount cap including post-scan bonuses
+            for _, r in ipairs(results) do
+                if r.components then
+                    local weights = FB.Scoring:GetWeights()
+                    local preBonusScore = (r.components.progress * math.max(0, weights.progressRemaining or 1.0))
+                                        + (r.components.time     * math.max(0, weights.timePerAttempt or 1.0))
+                                        + (r.components.gate     * math.max(0, weights.timeGate or 1.5))
+                                        + (r.components.group    * math.max(0, weights.groupRequirement or 1.2))
+                                        + (r.components.effort   * math.max(0, weights.effort or 1.0))
+                    r.score = math.max(r.score, preBonusScore * 0.50)
                 end
             end
 
@@ -309,6 +341,7 @@ function FB.Mounts.Scanner:FilterResults(results, filters)
         if filters.showProfession == false and r.sourceType == "profession" then pass = false end
         if filters.showAchievement == false and r.sourceType == "achievement" then pass = false end
         if filters.showVendor == false and r.sourceType == "vendor" then pass = false end
+        if filters.showRAF == false and r.sourceType == "recruit_a_friend" then pass = false end
 
         -- Immediately available only
         if filters.availableOnly and not r.immediatelyAvailable then pass = false end

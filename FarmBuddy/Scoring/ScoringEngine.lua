@@ -13,10 +13,16 @@ local DEFAULT_WEIGHTS = {
 
 -- Get current weights (from saved vars or defaults)
 function FB.Scoring:GetWeights()
+    local base
     if FB.db and FB.db.settings and FB.db.settings.weights then
-        return FB.db.settings.weights
+        base = FB.db.settings.weights
+    else
+        base = DEFAULT_WEIGHTS
     end
-    return DEFAULT_WEIGHTS
+    if FB.BehaviorTracker and FB.BehaviorTracker.ApplyAdjustments then
+        return FB.BehaviorTracker:ApplyAdjustments(base)
+    end
+    return base
 end
 
 function FB.Scoring:GetDefaultWeights()
@@ -74,7 +80,7 @@ function FB.Scoring:Score(input, weights)
     -- Component 5: Total Expected Effort (computed early, used by progressScore)
     local expectedAttempts
     if dropChance and dropChance > 0 and dropChance < 1 then
-        expectedAttempts = math.ceil(1 / dropChance)
+        expectedAttempts = math.ceil(math.log(0.5) / math.log(1 - dropChance))
     elseif isUnknownDrop then
         -- FIX-2: Unknown drop rate — use nil for display, conservative placeholder for scoring
         expectedAttempts = nil  -- Will use placeholder below for effort calc
@@ -161,7 +167,12 @@ function FB.Scoring:Score(input, weights)
     -- than Ashes of Al'ar (~1 year of weekly lockouts).
     local progressScore
     if dropChance and dropChance > 0 and dropChance < 1 then
-        progressScore = 0  -- Drop-based: effort score covers difficulty
+        progressScore = 0  -- Drop-based: effort score covers RNG difficulty
+        -- Prerequisite penalty: drop mounts with unfulfilled requirements
+        if (input.factionID or input.currencyID or input.achievementID or input.goldCost)
+           and progressRemaining > 0.01 then
+            progressScore = progressRemaining * 20
+        end
     else
         -- Scale progress by effort: "1.0 remaining on a 3-point effort" = 3, not 100
         -- This makes guaranteed mounts rank by their actual remaining work
@@ -200,6 +211,8 @@ function FB.Scoring:Score(input, weights)
                 + (groupScore      * math.max(0, weights.groupRequirement or 1.2))
                 + (effortScore     * math.max(0, weights.effort or 1.0))
 
+    local preBonusScore = score
+
     -- ===================================================================
     -- BONUSES & PENALTIES (multiplicative to preserve relative ordering)
     -- ===================================================================
@@ -212,23 +225,24 @@ function FB.Scoring:Score(input, weights)
     -- S2: Scale discount by time gate instead of flat 25%
     if immediatelyAvailable then
         local isDropMount = (dropChance and dropChance > 0 and dropChance < 1)
-        local prerequisiteMet = (progressRemaining <= 0) or isDropMount
 
-        if prerequisiteMet then
-            -- S2: Graduated bonus by time gate
-            local availabilityDiscounts = {
-                none = 0.25,    -- Unlimited farm: full discount
-                daily = 0.15,   -- Daily gated: moderate discount
-                biweekly = 0.12, -- Biweekly gated: between daily and weekly
-                weekly = 0.10,  -- Weekly gated: smaller discount
-                monthly = 0.09, -- Monthly rotation: small discount
-                yearly = 0.08,  -- Yearly event: minimal discount
-            }
-            local discount = availabilityDiscounts[input.timeGate or "none"] or 0.15
+        -- S2: Graduated bonus by time gate
+        local availabilityDiscounts = {
+            none = 0.25,    -- Unlimited farm: full discount
+            daily = 0.15,   -- Daily gated: moderate discount
+            biweekly = 0.12, -- Biweekly gated: between daily and weekly
+            weekly = 0.10,  -- Weekly gated: smaller discount
+            monthly = 0.09, -- Monthly rotation: small discount
+            yearly = 0.08,  -- Yearly event: minimal discount
+        }
+        local discount = availabilityDiscounts[input.timeGate or "none"] or 0.15
+        if isDropMount or progressRemaining <= 0 then
             score = score * (1 - discount)
+        elseif progressRemaining < 0.50 then
+            -- Graduated: closer to done = more discount
+            local progressFactor = 1 - (progressRemaining / 0.50)
+            score = score * (1 - discount * progressFactor)
         end
-        -- S1: Non-drop mounts with incomplete progress get NO availability bonus
-        -- (e.g., vendor mount needing Exalted when player is at Friendly)
     end
 
     -- Warband availability bonus: if current char is locked but alts are free,
@@ -242,25 +256,28 @@ function FB.Scoring:Score(input, weights)
     -- Instance efficiency bonus: multiple mounts from the same instance run
     local instanceGroupCount = input.instanceGroupCount
     if instanceGroupCount and instanceGroupCount > 1 then
-        local efficiencyDiscount = math.min(0.15, math.log(instanceGroupCount) * 0.08)
+        local efficiencyDiscount = math.min(0.25, math.log(instanceGroupCount) * 0.10)
         score = score * (1 - efficiencyDiscount)
     end
 
     -- Staleness nudge: mounts not attempted recently get a small boost
     local staleDays = input.staleDays
     if staleDays and staleDays > 7 then
-        local stalenessDiscount = math.min(0.10, math.log(staleDays / 7 + 1) * 0.03)
+        local stalenessDiscount = math.min(0.20, math.log(staleDays / 7 + 1) * 0.06)
         score = score * (1 - stalenessDiscount)
     end
 
     -- "Completable today" bonus: guaranteed mounts nearly done get extra discount
     -- S3: Mount at 99% completion (1 more quest) should surface above mount at 50%
     local isDropMount = (dropChance and dropChance > 0 and dropChance < 1)
-    if not isDropMount and progressRemaining <= 0.05 and immediatelyAvailable then
-        -- Scale: 0% remaining = 20% discount, 5% remaining = 4% discount
-        local completionDiscount = 0.20 * (1 - (progressRemaining / 0.05))
+    if not isDropMount and progressRemaining <= 0.15 and immediatelyAvailable then
+        -- Scale: 0% remaining = 20% discount, 15% remaining = ~0% discount
+        local completionDiscount = 0.20 * (1 - (progressRemaining / 0.15))
         score = score * (1 - completionDiscount)
     end
+
+    -- Cap total discount at 50% of pre-bonus score
+    score = math.max(score, preBonusScore * 0.50)
 
     -- Guard against NaN in final score, floor at 0 for UI sanity
     if score ~= score then score = 99999 end

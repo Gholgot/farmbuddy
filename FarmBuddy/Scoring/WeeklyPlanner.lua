@@ -44,16 +44,18 @@ function FB.WeeklyPlanner:GenerateWeeklyPlan()
     -- Step 2: Assign mounts to characters
     local assignments = {}  -- charKey -> { mounts }
     local mountAssigned = {}
+    local pendingLockouts = {} -- charKey -> count of mounts assigned this planning pass
 
     for _, mount in ipairs(weeklyMounts) do
         if not mountAssigned[mount.id] then
-            local bestChar = self:FindBestCharForMount(mount, characters)
+            local bestChar = self:FindBestCharForMount(mount, characters, pendingLockouts)
             if bestChar then
                 if not assignments[bestChar] then
                     assignments[bestChar] = {}
                 end
                 assignments[bestChar][#assignments[bestChar] + 1] = mount
                 mountAssigned[mount.id] = bestChar
+                pendingLockouts[bestChar] = (pendingLockouts[bestChar] or 0) + 1
             end
         end
     end
@@ -90,7 +92,7 @@ function FB.WeeklyPlanner:GenerateWeeklyPlan()
 end
 
 -- Find the best character for a specific mount
-function FB.WeeklyPlanner:FindBestCharForMount(mount, characters)
+function FB.WeeklyPlanner:FindBestCharForMount(mount, characters, pendingLockouts)
     if not characters or #characters == 0 then return nil end
 
     local bestChar = nil
@@ -119,7 +121,7 @@ function FB.WeeklyPlanner:FindBestCharForMount(mount, characters)
                         end
                     end
                     -- Prefer current character when tied
-                    local score = lockoutCount
+                    local score = lockoutCount + (pendingLockouts and pendingLockouts[char.key] or 0)
                     if char.key == FB.playerKey then score = score - 0.1 end
                     if score < bestScore then
                         bestScore = score
@@ -133,7 +135,7 @@ function FB.WeeklyPlanner:FindBestCharForMount(mount, characters)
                         lockoutCount = lockoutCount + 1
                     end
                 end
-                local score = lockoutCount
+                local score = lockoutCount + (pendingLockouts and pendingLockouts[char.key] or 0)
                 if char.key == FB.playerKey then score = score - 0.1 end
                 if score < bestScore then
                     bestScore = score
