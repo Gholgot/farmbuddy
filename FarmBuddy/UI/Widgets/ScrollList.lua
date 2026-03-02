@@ -220,7 +220,11 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
     end
 
     -- #24: Keyboard navigation
+    -- SetPropagateKeyboardInput(true) ensures unhandled keys (WASD, space, ability
+    -- keybinds) are passed through to the game engine so character movement and
+    -- abilities work normally while the addon window is open.
     frame:EnableKeyboard(false)  -- enabled when items are loaded
+    frame:SetPropagateKeyboardInput(true)
     frame:SetScript("OnKeyDown", function(self, key)
         if key == "UP" then
             local newIdx = math.max(1, (widget.selectedIndex or 1) - 1)

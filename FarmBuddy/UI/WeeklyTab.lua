@@ -677,14 +677,14 @@ function FB.UI.WeeklyTab:RenderGrid()
             GameTooltip:SetOwner(self2, "ANCHOR_RIGHT")
             GameTooltip:SetText(mt.name or "Unknown Mount", 1, 0.82, 0)
             local src = mt.instanceName or mt.sourceText or "Unknown Source"
-            GameTooltip:AddLine("Source: " .. src, 0.8, 0.8, 0.8, false)
+            GameTooltip:AddLine("Source: " .. src, 0.8, 0.8, 0.8)
             if mt.dropChance then
-                GameTooltip:AddLine(string.format("Drop Chance: %.1f%%", mt.dropChance * 100), 0.8, 0.9, 0.6, false)
+                GameTooltip:AddLine(string.format("Drop Chance: %.1f%%", mt.dropChance * 100), 0.8, 0.9, 0.6)
             else
-                GameTooltip:AddLine("Drop Chance: Unknown", 0.7, 0.7, 0.7, false)
+                GameTooltip:AddLine("Drop Chance: Unknown", 0.7, 0.7, 0.7)
             end
             local tgStr = mt.timeGate or "weekly"
-            GameTooltip:AddLine("Time Gate: " .. tgStr:gsub("^%l", string.upper), 0.7, 0.9, 1.0, false)
+            GameTooltip:AddLine("Time Gate: " .. tgStr:gsub("^%l", string.upper), 0.7, 0.9, 1.0)
             GameTooltip:AddLine(" ", 1, 1, 1)
             GameTooltip:AddLine("Click to select  |  Ctrl+Click for Mount Journal", 0.5, 0.5, 0.5, true)
             GameTooltip:Show()
@@ -758,9 +758,9 @@ function FB.UI.WeeklyTab:RenderGrid()
                 GameTooltip:SetOwner(self2, "ANCHOR_RIGHT")
                 local classColor = FB.CLASS_COLORS[ch.class] or "FFFFFF"
                 local shortName = ch.key:match("^(.-)%s*-") or ch.key
-                GameTooltip:SetText("|cFF" .. classColor .. shortName .. "|r", 1, 1, 1, false)
+                GameTooltip:SetText("|cFF" .. classColor .. shortName .. "|r", 1, 1, 1)
                 if ch.class then
-                    GameTooltip:AddLine(ch.class:gsub("^%l", string.upper), 0.7, 0.7, 0.7, false)
+                    GameTooltip:AddLine(ch.class:gsub("^%l", string.upper), 0.7, 0.7, 0.7)
                 end
                 GameTooltip:AddLine(" ", 1, 1, 1)
                 if cd then
@@ -780,14 +780,14 @@ function FB.UI.WeeklyTab:RenderGrid()
                                 resetStr = "Resetting soon"
                             end
                         end
-                        GameTooltip:AddLine("|TInterface\\RAIDFRAME\\ReadyCheck-NotReady:14:14|t Locked", 1, 0.4, 0.4, false)
-                        GameTooltip:AddLine("Resets in: " .. resetStr, 0.8, 0.8, 0.8, false)
+                        GameTooltip:AddLine("|TInterface\\RAIDFRAME\\ReadyCheck-NotReady:14:14|t Locked", 1, 0.4, 0.4)
+                        GameTooltip:AddLine("Resets in: " .. resetStr, 0.8, 0.8, 0.8)
                     else
-                        GameTooltip:AddLine("|TInterface\\RAIDFRAME\\ReadyCheck-Ready:14:14|t Available", 0.4, 1.0, 0.4, false)
-                        GameTooltip:AddLine("Not attempted this reset.", 0.7, 0.7, 0.7, false)
+                        GameTooltip:AddLine("|TInterface\\RAIDFRAME\\ReadyCheck-Ready:14:14|t Available", 0.4, 1.0, 0.4)
+                        GameTooltip:AddLine("Not attempted this reset.", 0.7, 0.7, 0.7)
                     end
                 else
-                    GameTooltip:AddLine(FB.COLORS.GRAY .. "No data for this character|r", 0.6, 0.6, 0.6, false)
+                    GameTooltip:AddLine(FB.COLORS.GRAY .. "No data for this character|r", 0.6, 0.6, 0.6)
                 end
                 GameTooltip:Show()
             end)

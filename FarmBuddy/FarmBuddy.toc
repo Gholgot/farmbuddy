@@ -56,6 +56,7 @@ UI/Widgets/ProgressBar.lua
 UI/Widgets/FilterBar.lua
 UI/Widgets/ModelPreview.lua
 UI/Widgets/ScoreBar.lua
+UI/Widgets/MountDetailPanel.lua
 
 # UI
 UI/TabManager.lua

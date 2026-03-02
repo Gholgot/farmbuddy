@@ -9,6 +9,8 @@ local previewLines = {}
 local previewStatusLine = nil
 local rescanBtn = nil
 local isScanning = false
+local scrollFrame = nil
+local scrollChild = nil
 
 -- ARCH-4: Debounce preview updates so rapid slider drags don't re-score all cached
 -- mounts on every tick. Only the final resting position triggers a rescore.
@@ -29,20 +31,80 @@ end
 function FB.UI.SettingsTab:Init(parentPanel)
     panel = parentPanel
 
+    -- Scrollable container so settings content doesn't overflow
+    scrollFrame = CreateFrame("ScrollFrame", "FarmBuddySettingsScroll", panel)
+    scrollFrame:SetPoint("TOPLEFT", 0, 0)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -12, 0)
+    scrollFrame:EnableMouseWheel(true)
+
+    scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetWidth(panel:GetWidth() - 12)
+    scrollFrame:SetScrollChild(scrollChild)
+
+    -- Keep child width in sync with panel
+    scrollFrame:SetScript("OnSizeChanged", function(self, w, h)
+        if w and w > 10 then
+            scrollChild:SetWidth(w)
+        end
+    end)
+
+    -- Mouse wheel scrolling
+    scrollFrame:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetVerticalScroll()
+        local maxScroll = math.max(0, scrollChild:GetHeight() - self:GetHeight())
+        local newScroll = math.max(0, math.min(maxScroll, current - (delta * 40)))
+        self:SetVerticalScroll(newScroll)
+    end)
+
+    -- Scrollbar
+    local scrollBar = CreateFrame("Slider", "FarmBuddySettingsScrollBar", panel, "BackdropTemplate")
+    scrollBar:SetPoint("TOPRIGHT", 0, 0)
+    scrollBar:SetPoint("BOTTOMRIGHT", 0, 0)
+    scrollBar:SetWidth(12)
+    scrollBar:SetOrientation("VERTICAL")
+    scrollBar:SetMinMaxValues(0, 1)
+    scrollBar:SetValue(0)
+    scrollBar:SetValueStep(20)
+    scrollBar:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 8,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    scrollBar:SetBackdropColor(0.05, 0.05, 0.05, 0.5)
+    local scrollThumb = scrollBar:CreateTexture(nil, "OVERLAY")
+    scrollThumb:SetColorTexture(0.4, 0.4, 0.4, 0.8)
+    scrollThumb:SetSize(8, 30)
+    scrollBar:SetThumbTexture(scrollThumb)
+
+    scrollBar:SetScript("OnValueChanged", function(self, value)
+        scrollFrame:SetVerticalScroll(value)
+    end)
+
+    -- Sync scrollbar with mouse wheel
+    scrollFrame:HookScript("OnMouseWheel", function(self)
+        scrollBar:SetValue(self:GetVerticalScroll())
+    end)
+
+    self.scrollBar = scrollBar
+
+    -- All content goes into scrollChild
+    local content = scrollChild
+
     -- Title
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local title = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 5, -5)
     title:SetText("Settings")
 
     local yOffset = -35
 
     -- Scoring Weights Section
-    local weightsHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local weightsHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     weightsHeader:SetPoint("TOPLEFT", 10, yOffset)
     weightsHeader:SetText(FB.COLORS.GOLD .. "Scoring Weights|r")
     yOffset = yOffset - 10
 
-    local weightsDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local weightsDesc = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     weightsDesc:SetPoint("TOPLEFT", 10, yOffset)
     weightsDesc:SetTextColor(0.6, 0.6, 0.6)
     weightsDesc:SetText("Adjust how much each factor affects the difficulty score. Higher = more impact.")
@@ -57,25 +119,25 @@ function FB.UI.SettingsTab:Init(parentPanel)
     }
 
     for _, def in ipairs(weightDefs) do
-        local slider = self:CreateWeightSlider(panel, def.key, def.label, def.desc, yOffset)
+        local slider = self:CreateWeightSlider(content, def.key, def.label, def.desc, yOffset)
         sliders[def.key] = slider
         yOffset = yOffset - 55
     end
 
     -- Weight Preview Section (shows top 5 mounts with current weights)
     yOffset = yOffset - 5
-    local previewHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local previewHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     previewHeader:SetPoint("TOPLEFT", 430, -45)
     previewHeader:SetText(FB.COLORS.GOLD .. "Preview (Top 5)|r")
 
-    local previewDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local previewDesc = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     previewDesc:SetPoint("TOPLEFT", 430, -58)
     previewDesc:SetTextColor(0.5, 0.5, 0.5)
     previewDesc:SetText("Shows how weights affect recommendations")
 
     -- Create 5 preview lines
     for i = 1, 5 do
-        local line = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local line = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         line:SetPoint("TOPLEFT", 430, -68 - (i * 16))
         line:SetWidth(370)
         line:SetJustifyH("LEFT")
@@ -84,7 +146,7 @@ function FB.UI.SettingsTab:Init(parentPanel)
     end
 
     -- #20: Status line showing cached mount count
-    previewStatusLine = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    previewStatusLine = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     previewStatusLine:SetPoint("TOPLEFT", 430, -68 - (6 * 16))
     previewStatusLine:SetWidth(370)
     previewStatusLine:SetJustifyH("LEFT")
@@ -92,7 +154,7 @@ function FB.UI.SettingsTab:Init(parentPanel)
     previewStatusLine:SetText("")
 
     -- #20: Re-scan Now button
-    rescanBtn = CreateFrame("Button", "FarmBuddySettingsRescanBtn", panel, "UIPanelButtonTemplate")
+    rescanBtn = CreateFrame("Button", "FarmBuddySettingsRescanBtn", content, "UIPanelButtonTemplate")
     rescanBtn:SetSize(110, 22)
     rescanBtn:SetPoint("TOPLEFT", 430, -68 - (7 * 16) - 4)
     rescanBtn:SetText("Re-scan Now")
@@ -118,18 +180,18 @@ function FB.UI.SettingsTab:Init(parentPanel)
 
     -- FIX-6: Playtime assumption section
     yOffset = yOffset - 15
-    local playtimeHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local playtimeHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     playtimeHeader:SetPoint("TOPLEFT", 10, yOffset)
     playtimeHeader:SetText(FB.COLORS.GOLD .. "Playtime Assumption|r")
     yOffset = yOffset - 10
 
-    local playtimeDesc = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local playtimeDesc = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     playtimeDesc:SetPoint("TOPLEFT", 10, yOffset)
     playtimeDesc:SetTextColor(0.6, 0.6, 0.6)
     playtimeDesc:SetText("How many hours per day you expect to play. Affects all time estimates.")
     yOffset = yOffset - 25
 
-    local hoursSlider = self:CreateSlider(panel, "hoursPerDay", "Hours Per Day",
+    local hoursSlider = self:CreateSlider(content, "hoursPerDay", "Hours Per Day",
         "Average daily playtime for mount farming (shown in all estimates).",
         yOffset, 0.5, 8, 0.5,
         (FB.db and FB.db.settings and FB.db.settings.hoursPerDay) or 2,
@@ -145,12 +207,12 @@ function FB.UI.SettingsTab:Init(parentPanel)
 
     -- Scan Settings Section
     yOffset = yOffset - 15
-    local scanHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local scanHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     scanHeader:SetPoint("TOPLEFT", 10, yOffset)
     scanHeader:SetText(FB.COLORS.GOLD .. "Scan Settings|r")
     yOffset = yOffset - 25
 
-    local batchSlider = self:CreateSlider(panel, "batchSize", "Batch Size",
+    local batchSlider = self:CreateSlider(content, "batchSize", "Batch Size",
         "Items per frame tick (0 = auto-adaptive). Higher = faster scan, more CPU.",
         yOffset, 0, 20, 1,
         (FB.db and FB.db.settings and FB.db.settings.scan and FB.db.settings.scan.batchSize) or 5,
@@ -164,12 +226,12 @@ function FB.UI.SettingsTab:Init(parentPanel)
 
     -- Recommendations Section
     yOffset = yOffset - 15
-    local recoHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local recoHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     recoHeader:SetPoint("TOPLEFT", 10, yOffset)
     recoHeader:SetText(FB.COLORS.GOLD .. "Recommendations|r")
     yOffset = yOffset - 25
 
-    local maxResultsSlider = self:CreateSlider(panel, "maxResults", "Default Results Count",
+    local maxResultsSlider = self:CreateSlider(content, "maxResults", "Default Results Count",
         "Default number of recommendations to show (0 = show all).",
         yOffset, 0, 100, 5,
         (FB.db and FB.db.settings and FB.db.settings.recommendations and FB.db.settings.recommendations.maxResults) or 20,
@@ -184,13 +246,13 @@ function FB.UI.SettingsTab:Init(parentPanel)
 
     -- UI Section
     yOffset = yOffset - 15
-    local uiHeader = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local uiHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     uiHeader:SetPoint("TOPLEFT", 10, yOffset)
     uiHeader:SetText(FB.COLORS.GOLD .. "UI Options|r")
     yOffset = yOffset - 25
 
     -- Minimap button toggle
-    local minimapCB = CreateFrame("CheckButton", "FarmBuddySettingsCB_minimap", panel, "UICheckButtonTemplate")
+    local minimapCB = CreateFrame("CheckButton", "FarmBuddySettingsCB_minimap", content, "UICheckButtonTemplate")
     minimapCB:SetSize(22, 22)
     minimapCB:SetPoint("TOPLEFT", 10, yOffset)
     local minimapHidden = FB.db and FB.db.settings and FB.db.settings.ui and FB.db.settings.ui.hideMinimapButton
@@ -223,7 +285,7 @@ function FB.UI.SettingsTab:Init(parentPanel)
 
     -- Reset button
     yOffset = yOffset - 10
-    local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local resetBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
     resetBtn:SetSize(150, 28)
     resetBtn:SetPoint("TOPLEFT", 10, yOffset)
     resetBtn:SetText("Reset to Defaults")
@@ -231,11 +293,41 @@ function FB.UI.SettingsTab:Init(parentPanel)
         FB.Storage:ResetSettings()
         FB.UI.SettingsTab:RefreshSliders()
     end)
+    yOffset = yOffset - 40
+
+    -- Set scroll child height to fit all content
+    scrollChild:SetHeight(math.abs(yOffset) + 10)
+
+    -- Update scrollbar range after layout
+    C_Timer.After(0, function()
+        if scrollFrame and scrollChild then
+            local maxScroll = math.max(0, scrollChild:GetHeight() - scrollFrame:GetHeight())
+            if self.scrollBar then
+                if maxScroll > 0 then
+                    self.scrollBar:SetMinMaxValues(0, maxScroll)
+                    self.scrollBar:Show()
+                else
+                    self.scrollBar:Hide()
+                end
+            end
+        end
+    end)
 end
 
 function FB.UI.SettingsTab:OnShow()
     self:RefreshSliders()
     self:UpdatePreview()
+
+    -- Update scrollbar range on show (panel might have resized)
+    if scrollFrame and scrollChild and self.scrollBar then
+        local maxScroll = math.max(0, scrollChild:GetHeight() - scrollFrame:GetHeight())
+        if maxScroll > 0 then
+            self.scrollBar:SetMinMaxValues(0, maxScroll)
+            self.scrollBar:Show()
+        else
+            self.scrollBar:Hide()
+        end
+    end
 end
 
 function FB.UI.SettingsTab:CreateWeightSlider(parent, key, label, desc, yOffset)

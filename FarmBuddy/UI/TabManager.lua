@@ -31,8 +31,10 @@ local TAB_DESCRIPTIONS = {
 
 -- Calculate dynamic tab width based on frame width and tab count
 local function CalcTabWidth(frameWidth, numTabs)
-    local totalGap = (numTabs + 1) * TAB_GAP
-    local width = math.floor((frameWidth - totalGap) / numTabs)
+    -- Account for: 12px left margin, 12px right margin, (numTabs-1) gaps between tabs
+    local margins = 12 + 12
+    local totalGap = (numTabs - 1) * TAB_GAP
+    local width = math.floor((frameWidth - margins - totalGap) / numTabs)
     return math.max(TAB_MIN_WIDTH, width)
 end
 

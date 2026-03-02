@@ -66,6 +66,15 @@ function FB.UI.Widgets:CreateModelPreview(parent, name)
             self:SetScript("OnUpdate", nil)  -- Stop running every frame
         end
     end)
+    -- Scroll-wheel zoom
+    model:EnableMouseWheel(true)
+    model:SetScript("OnMouseWheel", function(self, delta)
+        local scale = self.camDistanceScale or 1.8
+        scale = scale - (delta * 0.15)
+        scale = math.max(0.5, math.min(4.0, scale))
+        self.camDistanceScale = scale
+        self:SetCamDistanceScale(scale)
+    end)
     model.currentFacing = 0
     widget.model = model
 
@@ -100,11 +109,12 @@ function FB.UI.Widgets:CreateModelPreview(parent, name)
             model.currentFacing = 0
             -- Try to set a good camera angle
             if model.SetPosition then
-                model:SetPosition(0, 0, 0)
+                model:SetPosition(0, 0, -0.15)
             end
             if model.SetCamDistanceScale then
-                model:SetCamDistanceScale(1.2)
+                model:SetCamDistanceScale(1.8)
             end
+            model.camDistanceScale = 1.8
             nameLabel:SetText(mountName or "")
             hint:Hide()
             model:Show()
@@ -159,6 +169,7 @@ function FB.UI.Widgets:CreateModelPreview(parent, name)
     function widget:Clear()
         model:ClearModel()
         model:Hide()
+        model.camDistanceScale = 1.8
         nameLabel:SetText("")
         hint:Show()
     end

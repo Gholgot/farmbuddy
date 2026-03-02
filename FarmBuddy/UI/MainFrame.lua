@@ -16,6 +16,7 @@ function FB.UI:CreateMainFrame()
     mainFrame:SetMovable(true)
     mainFrame:SetResizable(true)
     mainFrame:EnableMouse(true)
+    mainFrame:EnableKeyboard(false)  -- prevent frame from consuming WASD/keybind input
     mainFrame:RegisterForDrag("LeftButton")
 
     -- Resize bounds

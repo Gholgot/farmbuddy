@@ -294,7 +294,7 @@ function FB.Tracker:Refresh()
                 else
                     -- White bullet for pending steps
                     stepLine:SetTextColor(0.8, 0.8, 0.8, 1.0)
-                    stepLine:SetText("|cFFFFFFFF" .. "\xE2\x80\xa2" .. "|r " .. step)
+                    stepLine:SetText("|cFFFFFFFF\226\128\162|r " .. step)
                 end
 
                 -- Calculate the height of the step text

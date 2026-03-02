@@ -28,6 +28,7 @@ local DEFAULTS_ACCOUNT = {
             trackerLocked = false,
             trackerScale = 1.0,
             lastTab = 1,
+            scoreExpanded = false,
         },
         scan = {
             batchSize = 5,

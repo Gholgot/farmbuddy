@@ -7,8 +7,6 @@ local panel
 local scrollList
 local progressBar
 local filterBar
-local scoreBar
-local modelPreview
 local scanResults = nil
 -- NOTE: selectedMount is intentionally module-level (not persisted). It is cleared
 -- on tab switch, which is a known limitation — selection is not restored after switching tabs.
@@ -149,190 +147,14 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
         end
     end)
 
-    -- Details panel (right)
-    local rightFrame = CreateFrame("Frame", nil, contentFrame, "BackdropTemplate")
+    -- Details panel (right) — shared widget
+    local rightFrame = CreateFrame("Frame", nil, contentFrame)
     rightFrame:SetPoint("TOPLEFT", leftFrame, "TOPRIGHT", 10, 0)
     rightFrame:SetPoint("BOTTOMRIGHT", contentFrame, "BOTTOMRIGHT", 0, 0)
-    rightFrame:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
-    })
-    rightFrame:SetBackdropColor(0.05, 0.05, 0.1, 0.9)
 
-    -- Score breakdown
-    scoreBar = FB.UI.Widgets:CreateScoreBar(rightFrame, "FarmBuddyMountScoreBar")
-    scoreBar.frame:SetPoint("TOPLEFT", 8, -8)
-    scoreBar.frame:SetPoint("RIGHT", -8, 0)
-
-    -- Model preview (between score bar and detail text)
-    modelPreview = FB.UI.Widgets:CreateModelPreview(rightFrame, "FarmBuddyRecommendPreview")
-    modelPreview.frame:SetPoint("TOPLEFT", scoreBar.frame, "BOTTOMLEFT", 0, -5)
-    modelPreview.frame:SetPoint("RIGHT", rightFrame, "RIGHT", -8, 0)
-    modelPreview.frame:SetHeight(180)
-
-    -- Bottom button row: Pin + WoWHead
-    local pinBtn = CreateFrame("Button", nil, rightFrame, "UIPanelButtonTemplate")
-    pinBtn:SetSize(120, 24)
-    pinBtn:SetPoint("BOTTOMRIGHT", -8, 8)
-    pinBtn:SetText("Pin to Tracker")
-    pinBtn:SetScript("OnClick", function()
-        if selectedMount and selectedMount.id then
-            local steps = selectedMount._resolvedSteps or selectedMount.steps or {}
-            FB.Tracker:Pin("mount", selectedMount.id, selectedMount.name, steps)
-            FB:Print("Pinned: " .. selectedMount.name)
-        end
-    end)
-    pinBtn:Hide()
-    self.pinBtn = pinBtn
-
-    -- WoWHead link button
-    local wowheadBtn = CreateFrame("Button", nil, rightFrame, "UIPanelButtonTemplate")
-    wowheadBtn:SetSize(100, 24)
-    wowheadBtn:SetPoint("RIGHT", pinBtn, "LEFT", -6, 0)
-    wowheadBtn:SetText("WoWHead")
-    wowheadBtn:SetNormalFontObject("GameFontNormalSmall")
-    wowheadBtn:SetScript("OnClick", function(self)
-        if selectedMount and selectedMount.id then
-            -- #10: Copy URL via anchored EditBox reused across clicks
-            local url = "https://www.wowhead.com/spell=" .. selectedMount.id
-            -- Reuse existing frame if already created (check global name)
-            local eb = _G["FarmBuddyWowheadCopyFrame"]
-            if not eb then
-                eb = CreateFrame("EditBox", "FarmBuddyWowheadCopyFrame", UIParent, "BackdropTemplate")
-                eb:SetSize(350, 28)
-                eb:SetFontObject("ChatFontNormal")
-                eb:SetAutoFocus(true)
-                eb:SetBackdrop({
-                    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-                    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-                    tile = true, tileSize = 16, edgeSize = 12,
-                    insets = { left = 3, right = 3, top = 3, bottom = 3 },
-                })
-                eb:SetBackdropColor(0.1, 0.1, 0.15, 1.0)
-                eb:SetTextInsets(4, 4, 0, 0)
-                eb:SetFrameStrata("DIALOG")
-
-                local label = eb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                label:SetPoint("BOTTOM", eb, "TOP", 0, 2)
-                label:SetText(FB.COLORS.GOLD .. "Ctrl+C to copy, Enter or Escape to close|r")
-                eb.label = label
-
-                eb:SetScript("OnEscapePressed", function(f) f:Hide() end)
-                eb:SetScript("OnEnterPressed", function(f) f:Hide() end)
-            end
-            -- #10: Anchor to the WoWHead button itself, not UIParent center
-            eb:ClearAllPoints()
-            eb:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -2)
-            eb:SetText(url)
-            eb:Show()
-            eb:HighlightText()
-            eb:SetFocus()
-        end
-    end)
-    wowheadBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("WoWHead Link")
-        if selectedMount and selectedMount.id then
-            GameTooltip:AddLine("wowhead.com/spell=" .. selectedMount.id, 0.7, 0.7, 0.7)
-        end
-        GameTooltip:AddLine("Click to copy link to clipboard", 0.5, 0.5, 0.5)
-        GameTooltip:Show()
-    end)
-    wowheadBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    wowheadBtn:Hide()
-    self.wowheadBtn = wowheadBtn
-
-    -- #8: Structured detail panel header (mount name, subtitle, separator)
-    local detailHeader = rightFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    detailHeader:SetPoint("TOPLEFT", modelPreview.frame, "BOTTOMLEFT", 4, -6)
-    detailHeader:SetPoint("RIGHT", rightFrame, "RIGHT", -8, 0)
-    detailHeader:SetJustifyH("LEFT")
-    detailHeader:SetWordWrap(false)
-    detailHeader:SetText("")
-    self.detailHeader = detailHeader
-
-    local detailSubtitle = rightFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    detailSubtitle:SetPoint("TOPLEFT", detailHeader, "BOTTOMLEFT", 0, -2)
-    detailSubtitle:SetPoint("RIGHT", rightFrame, "RIGHT", -8, 0)
-    detailSubtitle:SetJustifyH("LEFT")
-    detailSubtitle:SetTextColor(0.6, 0.6, 0.6)
-    detailSubtitle:SetText("")
-    self.detailSubtitle = detailSubtitle
-
-    local detailSeparator = rightFrame:CreateTexture(nil, "ARTWORK")
-    detailSeparator:SetHeight(1)
-    detailSeparator:SetPoint("TOPLEFT", detailSubtitle, "BOTTOMLEFT", 0, -4)
-    detailSeparator:SetPoint("RIGHT", rightFrame, "RIGHT", -8, 0)
-    detailSeparator:SetColorTexture(0.35, 0.35, 0.35, 0.8)
-    self.detailSeparator = detailSeparator
-
-    -- Scrollable detail text area (prevents overlap with buttons)
-    local detailScroll = CreateFrame("ScrollFrame", "FarmBuddyRecommendDetailScroll", rightFrame)
-    detailScroll:SetPoint("TOPLEFT", detailSeparator, "BOTTOMLEFT", 0, -4)
-    detailScroll:SetPoint("RIGHT", rightFrame, "RIGHT", -24, 0)
-    detailScroll:SetPoint("BOTTOM", pinBtn, "TOP", 0, 4)
-    detailScroll:EnableMouseWheel(true)
-
-    local detailChild = CreateFrame("Frame", nil, detailScroll)
-    detailChild:SetSize(300, 1)  -- Width will be updated on size change
-    detailScroll:SetScrollChild(detailChild)
-
-    local detailText = detailChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    detailText:SetPoint("TOPLEFT", 0, 0)
-    detailText:SetWidth(300)  -- Will be updated on size change
-    detailText:SetJustifyH("LEFT")
-    detailText:SetWordWrap(true)
-    detailText:SetText(FB.COLORS.GRAY .. "Run a scan, then select a mount for details|r")
-    self.detailText = detailText
-
-    -- Scroll bar
-    local detailScrollBar = CreateFrame("Slider", "FarmBuddyRecommendDetailScrollBar", rightFrame, "BackdropTemplate")
-    detailScrollBar:SetPoint("TOPLEFT", detailScroll, "TOPRIGHT", 4, 0)
-    detailScrollBar:SetPoint("BOTTOMLEFT", detailScroll, "BOTTOMRIGHT", 4, 0)
-    detailScrollBar:SetWidth(12)
-    detailScrollBar:SetOrientation("VERTICAL")
-    detailScrollBar:SetMinMaxValues(0, 1)
-    detailScrollBar:SetValue(0)
-    detailScrollBar:SetValueStep(20)
-    detailScrollBar:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 8,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
-    })
-    detailScrollBar:SetBackdropColor(0.05, 0.05, 0.05, 0.5)
-    local detailThumb = detailScrollBar:CreateTexture(nil, "OVERLAY")
-    detailThumb:SetColorTexture(0.4, 0.4, 0.4, 0.8)
-    detailThumb:SetSize(8, 30)
-    detailScrollBar:SetThumbTexture(detailThumb)
-    detailScrollBar:Hide()
-
-    detailScrollBar:SetScript("OnValueChanged", function(self, value)
-        detailScroll:SetVerticalScroll(value)
-    end)
-
-    -- Mouse wheel scrolling
-    detailScroll:SetScript("OnMouseWheel", function(self, delta)
-        local current = self:GetVerticalScroll()
-        local maxScroll = math.max(0, detailChild:GetHeight() - self:GetHeight())
-        local newScroll = math.max(0, math.min(maxScroll, current - (delta * 30)))
-        self:SetVerticalScroll(newScroll)
-        detailScrollBar:SetValue(newScroll)
-    end)
-
-    -- Keep child width in sync with scroll frame width
-    detailScroll:SetScript("OnSizeChanged", function(self, w, h)
-        if w and w > 10 then
-            detailChild:SetWidth(w)
-            detailText:SetWidth(w)
-        end
-    end)
-
-    self.detailScroll = detailScroll
-    self.detailChild = detailChild
-    self.detailScrollBar = detailScrollBar
+    local detailPanel = FB.UI.Widgets:CreateMountDetailPanel(rightFrame, "FarmBuddyRecommendDetail")
+    detailPanel.frame:SetAllPoints()
+    self.detailPanel = detailPanel
 
     -- Status label
     local statusLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -588,14 +410,7 @@ function FB.UI.MountRecommendTab:StartScan()
     progressBar:Show()
     filterBar.frame:Hide()
     if scrollList then scrollList:SetData({}) end
-    scoreBar:SetScore(nil)
-    self.detailText:SetText("")
-    if self.detailHeader then self.detailHeader:SetText("") end
-    if self.detailSubtitle then self.detailSubtitle:SetText("") end
-    self.pinBtn:Hide()
-
-    if modelPreview then modelPreview:Clear() end
-    if self.wowheadBtn then self.wowheadBtn:Hide() end
+    if self.detailPanel then self.detailPanel:Clear() end
 
     scanHandle = FB.Mounts.Scanner:StartScan(
         function(current, total)
@@ -666,109 +481,11 @@ function FB.UI.MountRecommendTab:SelectMount(item)
 
     selectedMount = item
 
-    -- Update score breakdown
-    scoreBar:SetScore({
-        score = item.score,
-        components = item.components,
+    self.detailPanel:SetMount(item, {
+        showCollectionStatus = false,
+        showSynergies = true,
+        showDiminishingReturns = true,
     })
-
-    -- Update model preview
-    if item.creatureDisplayID and modelPreview then
-        modelPreview:SetMount(item.creatureDisplayID, item.name)
-    elseif item.mountID and modelPreview then
-        modelPreview:SetMountByMountID(item.mountID)
-    elseif modelPreview then
-        modelPreview:Clear()
-    end
-
-    -- Show WoWHead button
-    if self.wowheadBtn then
-        self.wowheadBtn:Show()
-    end
-
-    -- #8: Use structured detail data to populate header, subtitle, and body separately
-    local detailData = FB.Utils:BuildMountDetailData(item, false)
-
-    if self.detailHeader then
-        self.detailHeader:SetText(detailData.name)
-    end
-    if self.detailSubtitle then
-        self.detailSubtitle:SetText(detailData.subtitle)
-    end
-
-    -- Build extra lines (synergies, diminishing returns) appended to detailText
-    local extraLines = {}
-
-    -- Add synergy info if available
-    if item.synergies and #item.synergies > 0 and FB.SynergyResolver then
-        local synergyLines = FB.SynergyResolver:FormatSynergies(item.synergies)
-        if synergyLines and #synergyLines > 0 then
-            extraLines[#extraLines + 1] = ""
-            extraLines[#extraLines + 1] = FB.COLORS.GREEN .. "Achievement Synergies:|r"
-            for _, sl in ipairs(synergyLines) do
-                extraLines[#extraLines + 1] = "  " .. sl
-            end
-        end
-    end
-
-    -- Add diminishing returns info if available
-    if item.attemptCount and item.attemptCount > 0 and item.dropChance and item.dropChance > 0 then
-        local expected = math.ceil(math.log(0.5) / math.log(1 - item.dropChance))
-        extraLines[#extraLines + 1] = ""
-        if item.attemptCount > expected then
-            local pUnlucky = (1 - item.dropChance) ^ item.attemptCount * 100
-            extraLines[#extraLines + 1] = string.format(
-                "%sAttempts:|r %d / %d expected (unluckiest %.0f%% of players)",
-                FB.COLORS.ORANGE, item.attemptCount, expected, pUnlucky
-            )
-            if item.attemptCount > expected * 3 then
-                extraLines[#extraLines + 1] = FB.COLORS.YELLOW .. "Consider diversifying to other mounts.|r"
-            end
-        else
-            extraLines[#extraLines + 1] = string.format(
-                "%sAttempts:|r %d / %d expected",
-                FB.COLORS.GOLD, item.attemptCount, expected
-            )
-        end
-    end
-
-    -- Store resolved steps for the pin button
-    selectedMount._resolvedSteps = detailData.steps
-
-    local bodyText = detailData.detailText
-    if #extraLines > 0 then
-        bodyText = bodyText .. "\n" .. table.concat(extraLines, "\n")
-    end
-    self.detailText:SetText(bodyText)
-
-    -- Resize scroll child to fit text and reset scroll position
-    C_Timer.After(0, function()
-        if self.detailText and self.detailChild and self.detailScroll then
-            local scrollWidth = self.detailScroll:GetWidth()
-            if scrollWidth and scrollWidth > 10 then
-                self.detailChild:SetWidth(scrollWidth)
-                self.detailText:SetWidth(scrollWidth)
-            end
-            local textHeight = self.detailText:GetStringHeight() or 100
-            self.detailChild:SetHeight(textHeight + 8)
-            self.detailScroll:SetVerticalScroll(0)
-
-            -- Update scrollbar
-            local maxScroll = math.max(0, textHeight + 8 - self.detailScroll:GetHeight())
-            if self.detailScrollBar then
-                if maxScroll > 0 then
-                    self.detailScrollBar:SetMinMaxValues(0, maxScroll)
-                    self.detailScrollBar:SetValue(0)
-                    self.detailScrollBar:Show()
-                else
-                    self.detailScrollBar:Hide()
-                end
-            end
-        end
-    end)
-
-    -- Show pin button for any recommended mount
-    self.pinBtn:Show()
 end
 
 function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
