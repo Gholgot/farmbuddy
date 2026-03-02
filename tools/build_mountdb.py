@@ -515,6 +515,31 @@ CURATED_OVERRIDES = {
     138642: {"sourceType": "vendor"},        # Black Primal Raptor
     138643: {"sourceType": "vendor"},        # Green Primal Raptor
 
+    # --- Achievement mounts misclassified as vendor by Blizzard API ---
+    59976:  {"sourceType": "achievement", "achievementID": 2138},   # Black Proto-Drake (Glory of the Raider 25)
+
+    # --- Gladiator PvP mounts misclassified as vendor ---
+    58615:  {"sourceType": "pvp"},          # Brutal Nether Drake (S4 TBC)
+    65439:  {"sourceType": "pvp"},          # Furious Gladiator's Frost Wyrm (S6)
+    67336:  {"sourceType": "pvp"},          # Relentless Gladiator's Frost Wyrm (S7)
+    71810:  {"sourceType": "pvp"},          # Wrathful Gladiator's Frost Wyrm (S8)
+    124550: {"sourceType": "pvp"},          # Cataclysmic Gladiator's Twilight Drake (S11)
+    139407: {"sourceType": "pvp"},          # Malevolent Gladiator's Cloud Serpent (S12)
+    148620: {"sourceType": "pvp"},          # Prideful Gladiator's Cloud Serpent (S15)
+    227986: {"sourceType": "pvp"},          # Vindictive Gladiator's Storm Dragon (Legion S1)
+    332400: {"sourceType": "pvp"},          # Sinful Gladiator's Soul Eater (SL S1)
+    353036: {"sourceType": "pvp"},          # Unchained Gladiator's Soul Eater (SL S4)
+    377071: {"sourceType": "pvp"},          # Crimson Gladiator's Drake (DF S1)
+    408977: {"sourceType": "pvp"},          # Obsidian Gladiator's Slitherdrake (DF S3)
+    449466: {"sourceType": "pvp"},          # Forged Gladiator's Fel Bat (TWW S1)
+    1262840: {"sourceType": "pvp"},         # Galactic Gladiator's Goredrake (TWW S2?)
+
+    # --- Legacy PvP Nether Drakes misclassified as achievement (should be pvp) ---
+    37015:  {"sourceType": "pvp"},          # Swift Nether Drake (S1 TBC)
+    44317:  {"sourceType": "pvp"},          # Merciless Nether Drake (S2 TBC)
+    44744:  {"sourceType": "pvp"},          # Merciless Nether Drake (S2 duplicate)
+    49193:  {"sourceType": "pvp"},          # Vengeful Nether Drake (S3 TBC)
+
     # --- Source type corrections: Vicious PvP mounts (Vicious Saddle currency, not achievement) ---
     100332: {"sourceType": "pvp"},           # Vicious War Steed
     100333: {"sourceType": "pvp"},           # Vicious War Wolf
@@ -2317,6 +2342,20 @@ def merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
             wago.get("sourceText", ""),
         )
 
+        # ---- Auto-correct vendor/unknown → achievement when achievementID is resolved ----
+        # Blizzard API misclassifies some legacy achievement mounts as VENDOR
+        if entry.get("sourceType") in ("vendor", "unknown") and entry.get("achievementID"):
+            entry["sourceType"] = "achievement"
+
+        # If wago says achievement (enum 6) but Blizzard API said VENDOR, trust wago
+        if wago.get("blizzSourceType") == 6 and entry.get("sourceType") == "vendor":
+            entry["sourceType"] = "achievement"
+
+        # ---- Auto-detect Gladiator mounts as PvP ----
+        mount_name_lower = entry.get("name", "").lower()
+        if "gladiator" in mount_name_lower and entry.get("sourceType") in ("vendor", "achievement", "unknown"):
+            entry["sourceType"] = "pvp"
+
         # ---- Cross-reference Wowhead tooltip for source type corrections ----
         wh = (wowhead_results or {}).get(spell_id, {})
         source_hint = wh.get("sourceHint")
@@ -2404,6 +2443,14 @@ def merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
                 merged[spell_id]["timeGate"] = get_time_gate(src, exp)
             if "groupRequirement" not in overrides:
                 merged[spell_id]["groupRequirement"] = get_group_requirement(src, exp)
+            # Re-generate steps if sourceType changed but override has no explicit steps.
+            # This prevents stale steps (e.g. vendor steps on a mount reclassified to achievement).
+            if "sourceType" in overrides and "steps" not in overrides:
+                wago = wago_mounts.get(spell_id, {})
+                wh_entry = (wowhead_results or {}).get(spell_id, {})
+                new_steps = generate_steps(merged[spell_id], wago, wh_entry, achievement_name_map or {})
+                if new_steps:
+                    merged[spell_id]["steps"] = new_steps
 
     print(f"  Merged database: {len(merged)} mounts")
     return merged
