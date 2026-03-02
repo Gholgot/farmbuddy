@@ -1,4 +1,5 @@
 tools/.cache/
+tools/.env
 .claude/
 
 # Compiled Lua sources
