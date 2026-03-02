@@ -14,6 +14,8 @@ local scanResults = nil
 -- on tab switch, which is a known limitation — selection is not restored after switching tabs.
 local selectedMount = nil
 local scanHandle = nil
+-- #3: Guard against auto-scan firing more than once per session
+local autoScanned = false
 
 function FB.UI.MountRecommendTab:Init(parentPanel)
     panel = parentPanel
@@ -92,13 +94,34 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
         FB.UI.MountRecommendTab:ApplyFilters()
     end)
 
-    -- Goal progress display (shown when a goal is active)
-    local goalBar = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    goalBar:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", 0, -2)
-    goalBar:SetPoint("RIGHT", filterBar.frame, "RIGHT", 0, 0)
-    goalBar:SetJustifyH("LEFT")
-    goalBar:Hide()
-    self.goalBar = goalBar
+    -- #25: Goal progress display with inline progress bar
+    local goalBarFrame = CreateFrame("Frame", nil, panel)
+    goalBarFrame:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", 0, -3)
+    goalBarFrame:SetHeight(16)
+    goalBarFrame:SetWidth(260)
+    goalBarFrame:Hide()
+
+    -- Background bar
+    local goalBg = goalBarFrame:CreateTexture(nil, "BACKGROUND")
+    goalBg:SetAllPoints()
+    goalBg:SetColorTexture(0.15, 0.15, 0.15, 0.8)
+
+    -- Fill texture (width set dynamically in UpdateGoalProgress)
+    local goalFill = goalBarFrame:CreateTexture(nil, "ARTWORK")
+    goalFill:SetPoint("TOPLEFT", 1, -1)
+    goalFill:SetPoint("BOTTOMLEFT", 1, 1)
+    goalFill:SetWidth(1)
+    goalFill:SetColorTexture(0.2, 0.6, 0.2, 0.8)
+
+    -- Text label on top of the bar
+    local goalText = goalBarFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    goalText:SetAllPoints()
+    goalText:SetJustifyH("LEFT")
+    goalText:SetTextInsets(4, 4, 0, 0)
+
+    self.goalBar = goalBarFrame
+    self.goalFill = goalFill
+    self.goalText = goalText
 
     -- Results area: left list + right details (anchored below filter bar)
     local contentFrame = CreateFrame("Frame", nil, panel)
@@ -166,15 +189,15 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     wowheadBtn:SetPoint("RIGHT", pinBtn, "LEFT", -6, 0)
     wowheadBtn:SetText("WoWHead")
     wowheadBtn:SetNormalFontObject("GameFontNormalSmall")
-    wowheadBtn:SetScript("OnClick", function()
+    wowheadBtn:SetScript("OnClick", function(self)
         if selectedMount and selectedMount.id then
-            -- Copy URL to clipboard via an edit box (WoW can't open browser directly)
+            -- #10: Copy URL via anchored EditBox reused across clicks
             local url = "https://www.wowhead.com/spell=" .. selectedMount.id
-            -- Create or reuse a temporary edit box for clipboard copy
-            if not FB._wowheadEditBox then
-                local eb = CreateFrame("EditBox", "FarmBuddyWowheadCopy", UIParent, "BackdropTemplate")
+            -- Reuse existing frame if already created (check global name)
+            local eb = _G["FarmBuddyWowheadCopyFrame"]
+            if not eb then
+                eb = CreateFrame("EditBox", "FarmBuddyWowheadCopyFrame", UIParent, "BackdropTemplate")
                 eb:SetSize(350, 28)
-                eb:SetPoint("TOP", UIParent, "TOP", 0, -120)
                 eb:SetFontObject("ChatFontNormal")
                 eb:SetAutoFocus(true)
                 eb:SetBackdrop({
@@ -189,14 +212,15 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
 
                 local label = eb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
                 label:SetPoint("BOTTOM", eb, "TOP", 0, 2)
-                label:SetText(FB.COLORS.GOLD .. "Press Ctrl+C to copy, then Escape to close|r")
+                label:SetText(FB.COLORS.GOLD .. "Ctrl+C to copy, Enter or Escape to close|r")
                 eb.label = label
 
-                eb:SetScript("OnEscapePressed", function(self) self:Hide() end)
-                eb:SetScript("OnEnterPressed", function(self) self:Hide() end)
-                FB._wowheadEditBox = eb
+                eb:SetScript("OnEscapePressed", function(f) f:Hide() end)
+                eb:SetScript("OnEnterPressed", function(f) f:Hide() end)
             end
-            local eb = FB._wowheadEditBox
+            -- #10: Anchor to the WoWHead button itself, not UIParent center
+            eb:ClearAllPoints()
+            eb:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -2)
             eb:SetText(url)
             eb:Show()
             eb:HighlightText()
@@ -216,9 +240,33 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     wowheadBtn:Hide()
     self.wowheadBtn = wowheadBtn
 
+    -- #8: Structured detail panel header (mount name, subtitle, separator)
+    local detailHeader = rightFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    detailHeader:SetPoint("TOPLEFT", modelPreview.frame, "BOTTOMLEFT", 4, -6)
+    detailHeader:SetPoint("RIGHT", rightFrame, "RIGHT", -8, 0)
+    detailHeader:SetJustifyH("LEFT")
+    detailHeader:SetWordWrap(false)
+    detailHeader:SetText("")
+    self.detailHeader = detailHeader
+
+    local detailSubtitle = rightFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    detailSubtitle:SetPoint("TOPLEFT", detailHeader, "BOTTOMLEFT", 0, -2)
+    detailSubtitle:SetPoint("RIGHT", rightFrame, "RIGHT", -8, 0)
+    detailSubtitle:SetJustifyH("LEFT")
+    detailSubtitle:SetTextColor(0.6, 0.6, 0.6)
+    detailSubtitle:SetText("")
+    self.detailSubtitle = detailSubtitle
+
+    local detailSeparator = rightFrame:CreateTexture(nil, "ARTWORK")
+    detailSeparator:SetHeight(1)
+    detailSeparator:SetPoint("TOPLEFT", detailSubtitle, "BOTTOMLEFT", 0, -4)
+    detailSeparator:SetPoint("RIGHT", rightFrame, "RIGHT", -8, 0)
+    detailSeparator:SetColorTexture(0.35, 0.35, 0.35, 0.8)
+    self.detailSeparator = detailSeparator
+
     -- Scrollable detail text area (prevents overlap with buttons)
     local detailScroll = CreateFrame("ScrollFrame", "FarmBuddyRecommendDetailScroll", rightFrame)
-    detailScroll:SetPoint("TOPLEFT", modelPreview.frame, "BOTTOMLEFT", 0, -5)
+    detailScroll:SetPoint("TOPLEFT", detailSeparator, "BOTTOMLEFT", 0, -4)
     detailScroll:SetPoint("RIGHT", rightFrame, "RIGHT", -24, 0)
     detailScroll:SetPoint("BOTTOM", pinBtn, "TOP", 0, 4)
     detailScroll:EnableMouseWheel(true)
@@ -502,6 +550,11 @@ function FB.UI.MountRecommendTab:OnShow()
         progressBar:Hide()
         filterBar.frame:Show()
         self.statusLabel:SetText(string.format("%d mounts scored | Last scan: this session", #cached))
+    elseif not autoScanned and not scanHandle then
+        -- #3: Auto-scan on first open when no cached results exist
+        autoScanned = true
+        self.statusLabel:SetText("Scanning mounts...")
+        self:StartScan()
     else
         filterBar.frame:Show()
         self.statusLabel:SetText("No scan results. Click 'Scan Mounts' to begin.")
@@ -515,6 +568,8 @@ function FB.UI.MountRecommendTab:StartScan()
     scrollList:SetData({})
     scoreBar:SetScore(nil)
     self.detailText:SetText("")
+    if self.detailHeader then self.detailHeader:SetText("") end
+    if self.detailSubtitle then self.detailSubtitle:SetText("") end
     self.pinBtn:Hide()
 
     if modelPreview then modelPreview:Clear() end
@@ -608,17 +663,27 @@ function FB.UI.MountRecommendTab:SelectMount(item)
         self.wowheadBtn:Show()
     end
 
-    -- Use shared detail builder (false = don't show collected status on recommend tab)
-    local lines, steps = FB.Utils:BuildMountDetailLines(item, false)
+    -- #8: Use structured detail data to populate header, subtitle, and body separately
+    local detailData = FB.Utils:BuildMountDetailData(item, false)
+
+    if self.detailHeader then
+        self.detailHeader:SetText(detailData.name)
+    end
+    if self.detailSubtitle then
+        self.detailSubtitle:SetText(detailData.subtitle)
+    end
+
+    -- Build extra lines (synergies, diminishing returns) appended to detailText
+    local extraLines = {}
 
     -- Add synergy info if available
     if item.synergies and #item.synergies > 0 and FB.SynergyResolver then
         local synergyLines = FB.SynergyResolver:FormatSynergies(item.synergies)
         if synergyLines and #synergyLines > 0 then
-            lines[#lines + 1] = ""
-            lines[#lines + 1] = FB.COLORS.GREEN .. "Achievement Synergies:|r"
+            extraLines[#extraLines + 1] = ""
+            extraLines[#extraLines + 1] = FB.COLORS.GREEN .. "Achievement Synergies:|r"
             for _, sl in ipairs(synergyLines) do
-                lines[#lines + 1] = "  " .. sl
+                extraLines[#extraLines + 1] = "  " .. sl
             end
         end
     end
@@ -626,18 +691,18 @@ function FB.UI.MountRecommendTab:SelectMount(item)
     -- Add diminishing returns info if available
     if item.attemptCount and item.attemptCount > 0 and item.dropChance and item.dropChance > 0 then
         local expected = math.ceil(1 / item.dropChance)
-        lines[#lines + 1] = ""
+        extraLines[#extraLines + 1] = ""
         if item.attemptCount > expected then
             local pUnlucky = math.pow(1 - item.dropChance, item.attemptCount) * 100
-            lines[#lines + 1] = string.format(
+            extraLines[#extraLines + 1] = string.format(
                 "%sAttempts:|r %d / %d expected (unluckiest %.0f%% of players)",
                 FB.COLORS.ORANGE, item.attemptCount, expected, pUnlucky
             )
             if item.attemptCount > expected * 3 then
-                lines[#lines + 1] = FB.COLORS.YELLOW .. "Consider diversifying to other mounts.|r"
+                extraLines[#extraLines + 1] = FB.COLORS.YELLOW .. "Consider diversifying to other mounts.|r"
             end
         else
-            lines[#lines + 1] = string.format(
+            extraLines[#extraLines + 1] = string.format(
                 "%sAttempts:|r %d / %d expected",
                 FB.COLORS.GOLD, item.attemptCount, expected
             )
@@ -645,9 +710,13 @@ function FB.UI.MountRecommendTab:SelectMount(item)
     end
 
     -- Store resolved steps for the pin button
-    selectedMount._resolvedSteps = steps
+    selectedMount._resolvedSteps = detailData.steps
 
-    self.detailText:SetText(table.concat(lines, "\n"))
+    local bodyText = detailData.detailText
+    if #extraLines > 0 then
+        bodyText = bodyText .. "\n" .. table.concat(extraLines, "\n")
+    end
+    self.detailText:SetText(bodyText)
 
     -- Resize scroll child to fit text and reset scroll position
     C_Timer.After(0, function()
@@ -688,9 +757,10 @@ function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
 
     local goals = FB.db.goals
     local text = nil
+    local ratio = 0  -- 0..1 fill ratio for the progress bar
 
     if goals.targetExpansion then
-        -- Count uncollected mounts for this expansion using cachedMountScores (which has expansion annotations)
+        -- Count uncollected mounts for this expansion using cachedMountScores
         local remaining = 0
         if FB.db and FB.db.cachedMountScores then
             for _, r in ipairs(FB.db.cachedMountScores) do
@@ -701,9 +771,16 @@ function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
         end
         local expName = FB.EXPANSION_NAMES[goals.targetExpansion] or goals.targetExpansion
         text = string.format(
-            "%sGoal:|r %s completion - %d mounts remaining",
+            "%sGoal:|r %s - %d remaining",
             FB.COLORS.GOLD, expName, remaining
         )
+        -- Estimate total from cached: collected + remaining
+        local totalEstimate = remaining  -- We only have remaining here, ratio stays 0 unless we can derive total
+        if FB.db.cachedMountScores then
+            -- All scored mounts for this expansion = remaining (uncollected only scored)
+            -- We can't easily derive collected count here, so leave ratio at 0 for expansion goal
+            ratio = 0
+        end
     elseif goals.targetMountCount then
         local currentCount = 0
         if C_MountJournal and C_MountJournal.GetMountIDs then
@@ -721,10 +798,28 @@ function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
             "%sGoal:|r %d / %d mounts (%d%%)",
             FB.COLORS.GOLD, currentCount, goals.targetMountCount, pct
         )
+        ratio = goals.targetMountCount > 0 and (currentCount / goals.targetMountCount) or 0
+        ratio = math.min(ratio, 1.0)
     end
 
     if text then
-        self.goalBar:SetText(text)
+        -- #25: Update fill width proportional to progress
+        if self.goalFill and self.goalBar:GetWidth() and self.goalBar:GetWidth() > 2 then
+            local barW = self.goalBar:GetWidth() - 2
+            local fillW = math.max(1, barW * ratio)
+            self.goalFill:SetWidth(fillW)
+            -- Color: green > 75%, yellow > 50%, orange otherwise
+            if ratio > 0.75 then
+                self.goalFill:SetColorTexture(0.2, 0.7, 0.2, 0.8)
+            elseif ratio > 0.5 then
+                self.goalFill:SetColorTexture(0.8, 0.8, 0.1, 0.8)
+            else
+                self.goalFill:SetColorTexture(0.9, 0.45, 0.1, 0.8)
+            end
+        end
+        if self.goalText then
+            self.goalText:SetText(text)
+        end
         self.goalBar:Show()
     else
         self.goalBar:Hide()

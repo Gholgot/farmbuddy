@@ -6,6 +6,9 @@ FB.UI.SettingsTab = {}
 local panel
 local sliders = {}
 local previewLines = {}
+local previewStatusLine = nil
+local rescanBtn = nil
+local isScanning = false
 
 function FB.UI.SettingsTab:Init(parentPanel)
     panel = parentPanel
@@ -63,6 +66,39 @@ function FB.UI.SettingsTab:Init(parentPanel)
         line:SetText("")
         previewLines[i] = line
     end
+
+    -- #20: Status line showing cached mount count
+    previewStatusLine = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    previewStatusLine:SetPoint("TOPLEFT", 430, -68 - (6 * 16))
+    previewStatusLine:SetWidth(370)
+    previewStatusLine:SetJustifyH("LEFT")
+    previewStatusLine:SetTextColor(0.5, 0.5, 0.5)
+    previewStatusLine:SetText("")
+
+    -- #20: Re-scan Now button
+    rescanBtn = CreateFrame("Button", "FarmBuddySettingsRescanBtn", panel, "UIPanelButtonTemplate")
+    rescanBtn:SetSize(110, 22)
+    rescanBtn:SetPoint("TOPLEFT", 430, -68 - (7 * 16) - 4)
+    rescanBtn:SetText("Re-scan Now")
+    rescanBtn:SetScript("OnClick", function()
+        if isScanning then return end
+        isScanning = true
+        rescanBtn:SetText("Scanning...")
+        rescanBtn:SetEnabled(false)
+        if previewStatusLine then
+            previewStatusLine:SetText("|cFFFFAA00Scanning mounts...|r")
+        end
+
+        FB.Mounts.Scanner:StartScan(nil, function(results)
+            isScanning = false
+            if rescanBtn then
+                rescanBtn:SetText("Re-scan Now")
+                rescanBtn:SetEnabled(true)
+            end
+            -- UpdatePreview will pick up the freshly cached results
+            FB.UI.SettingsTab:UpdatePreview()
+        end)
+    end)
 
     -- FIX-6: Playtime assumption section
     yOffset = yOffset - 15
@@ -319,7 +355,16 @@ function FB.UI.SettingsTab:UpdatePreview()
                 previewLines[i]:SetText(i == 1 and "|cFF888888Run a scan first to see preview|r" or "")
             end
         end
+        if previewStatusLine then
+            previewStatusLine:SetText("|cFF888888No cached mounts — click Re-scan Now|r")
+        end
         return
+    end
+
+    -- #20: Update cached mount count status line
+    if previewStatusLine and not isScanning then
+        local count = #FB.db.cachedMountScores
+        previewStatusLine:SetText("|cFF888888Based on " .. count .. " cached mounts|r")
     end
 
     -- Re-score top cached mounts with current weights

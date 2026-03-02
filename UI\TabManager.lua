@@ -13,9 +13,40 @@ local TAB_HOVER_BG = { 0.2, 0.2, 0.2, 0.9 }
 local TAB_ACTIVE_TEXT = { 1.0, 0.82, 0.0 }      -- Gold
 local TAB_INACTIVE_TEXT = { 0.7, 0.7, 0.7 }      -- Gray
 
+-- Minimum tab width before text gets truncated
+local TAB_MIN_WIDTH = 60
+-- Gap between tab buttons
+local TAB_GAP = 4
+
+-- Brief descriptions shown in tab tooltips
+local TAB_DESCRIPTIONS = {
+    "Search and filter all mounts by source, expansion, and status",
+    "AI-scored mount farming priorities",
+    "Plan your farming activities for today",
+    "Track mount-rewarding achievements",
+    "Track weekly lockouts across characters",
+    "Mount collection progress by expansion",
+    "Configure scoring weights and display options",
+}
+
+-- Calculate dynamic tab width based on frame width and tab count
+local function CalcTabWidth(frameWidth, numTabs)
+    local totalGap = (numTabs + 1) * TAB_GAP
+    local width = math.floor((frameWidth - totalGap) / numTabs)
+    return math.max(TAB_MIN_WIDTH, width)
+end
+
+-- Apply a new width to all existing tab buttons
+local function ApplyTabWidths(width)
+    for _, tab in ipairs(tabs) do
+        tab:SetWidth(width)
+    end
+end
+
 -- Create a fully manual tab button (no template dependency)
 local function CreateTabButton(parent, index, text)
     local tab = CreateFrame("Button", "FarmBuddyTab" .. index, parent, "BackdropTemplate")
+    -- Initial width calculated later in Init; use 100 as placeholder
     tab:SetSize(100, 28)
     tab:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -41,6 +72,9 @@ local function CreateTabButton(parent, index, text)
     indicator:Hide()
     tab.indicator = indicator
 
+    -- Tooltip description for this tab
+    local tooltipDesc = TAB_DESCRIPTIONS[index] or ""
+
     -- Hover effects
     tab:SetScript("OnEnter", function(self)
         if activeTab ~= index then
@@ -48,6 +82,9 @@ local function CreateTabButton(parent, index, text)
         end
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText(text)
+        if tooltipDesc ~= "" then
+            GameTooltip:AddLine(tooltipDesc, 0.8, 0.8, 0.8, true)
+        end
         GameTooltip:Show()
     end)
     tab:SetScript("OnLeave", function(self)
@@ -65,7 +102,7 @@ local function CreateTabButton(parent, index, text)
     if index == 1 then
         tab:SetPoint("TOPLEFT", parent, "TOPLEFT", 12, -28)
     else
-        tab:SetPoint("LEFT", tabs[index - 1], "RIGHT", 4, 0)
+        tab:SetPoint("LEFT", tabs[index - 1], "RIGHT", TAB_GAP, 0)
     end
 
     return tab
@@ -101,6 +138,17 @@ function FB.TabManager:Init(parent)
         panel:Hide()
         tabPanels[i] = panel
     end
+
+    -- #14: Apply dynamic tab widths based on current frame width
+    local frameWidth = parent:GetWidth() or 950
+    local tabWidth = CalcTabWidth(frameWidth, #FB.TAB_NAMES)
+    ApplyTabWidths(tabWidth)
+
+    -- #14: Recalculate tab widths when the frame is resized
+    parent:HookScript("OnSizeChanged", function(self, newWidth, newHeight)
+        local newTabWidth = CalcTabWidth(newWidth, #FB.TAB_NAMES)
+        ApplyTabWidths(newTabWidth)
+    end)
 
     -- Select last used tab or default to 1
     local lastTab = FB.db and FB.db.settings and FB.db.settings.ui and FB.db.settings.ui.lastTab or 1

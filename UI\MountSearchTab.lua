@@ -9,9 +9,9 @@ local modelPreview
 local filterBar
 local searchBox
 local scoreBar
+local progressBar = nil  -- #21: replaces loadingLabel
 local allMountData = nil
 local selectedMount = nil
-local loadingLabel = nil
 local loadHandle = nil
 
 function FB.UI.MountSearchTab:Init(parentPanel)
@@ -129,10 +129,68 @@ function FB.UI.MountSearchTab:Init(parentPanel)
     scoreBar.frame:SetPoint("TOPLEFT", 8, -8)
     scoreBar.frame:SetPoint("RIGHT", -8, 0)
 
-    -- Pin button (anchor first so detail text can stop above it)
+    -- #11: WoWHead button (left of pin button)
+    local wowheadBtn = CreateFrame("Button", nil, detailsFrame, "UIPanelButtonTemplate")
+    wowheadBtn:SetSize(100, 24)
+    wowheadBtn:SetPoint("BOTTOMRIGHT", -8, 8)
+    wowheadBtn:SetText("WoWHead")
+    wowheadBtn:SetNormalFontObject("GameFontNormalSmall")
+    wowheadBtn:SetScript("OnClick", function(self)
+        if selectedMount then
+            local spellID = selectedMount.id or selectedMount.spellID or selectedMount.mountID
+            if spellID then
+                local url = "https://www.wowhead.com/spell=" .. spellID
+                local eb = _G["FarmBuddyWowheadCopyFrame"]
+                if not eb then
+                    eb = CreateFrame("EditBox", "FarmBuddyWowheadCopyFrame", UIParent, "BackdropTemplate")
+                    eb:SetSize(350, 28)
+                    eb:SetFontObject("ChatFontNormal")
+                    eb:SetAutoFocus(true)
+                    eb:SetBackdrop({
+                        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                        tile = true, tileSize = 16, edgeSize = 12,
+                        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+                    })
+                    eb:SetBackdropColor(0.1, 0.1, 0.15, 1.0)
+                    eb:SetTextInsets(4, 4, 0, 0)
+                    eb:SetFrameStrata("DIALOG")
+                    local label = eb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    label:SetPoint("BOTTOM", eb, "TOP", 0, 2)
+                    label:SetText(FB.COLORS.GOLD .. "Ctrl+C to copy, Enter or Escape to close|r")
+                    eb.label = label
+                    eb:SetScript("OnEscapePressed", function(f) f:Hide() end)
+                    eb:SetScript("OnEnterPressed", function(f) f:Hide() end)
+                end
+                eb:ClearAllPoints()
+                eb:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -2)
+                eb:SetText(url)
+                eb:Show()
+                eb:HighlightText()
+                eb:SetFocus()
+            end
+        end
+    end)
+    wowheadBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("WoWHead Link")
+        if selectedMount then
+            local spellID = selectedMount.id or selectedMount.spellID or selectedMount.mountID
+            if spellID then
+                GameTooltip:AddLine("wowhead.com/spell=" .. spellID, 0.7, 0.7, 0.7)
+            end
+        end
+        GameTooltip:AddLine("Click to copy link to clipboard", 0.5, 0.5, 0.5)
+        GameTooltip:Show()
+    end)
+    wowheadBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    wowheadBtn:Hide()
+    self.wowheadBtn = wowheadBtn
+
+    -- Pin button (left of WoWHead button)
     local pinBtn = CreateFrame("Button", nil, detailsFrame, "UIPanelButtonTemplate")
     pinBtn:SetSize(120, 24)
-    pinBtn:SetPoint("BOTTOMRIGHT", -8, 8)
+    pinBtn:SetPoint("RIGHT", wowheadBtn, "LEFT", -6, 0)
     pinBtn:SetText("Pin to Tracker")
     pinBtn:SetScript("OnClick", function()
         if selectedMount and selectedMount.id then
@@ -147,9 +205,33 @@ function FB.UI.MountSearchTab:Init(parentPanel)
     pinBtn:Hide()
     self.pinBtn = pinBtn
 
+    -- #8: Structured detail header (name + subtitle + separator), anchored above scroll
+    local detailHeader = detailsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    detailHeader:SetPoint("TOPLEFT", scoreBar.frame, "BOTTOMLEFT", 0, -6)
+    detailHeader:SetPoint("RIGHT", detailsFrame, "RIGHT", -8, 0)
+    detailHeader:SetJustifyH("LEFT")
+    detailHeader:SetWordWrap(false)
+    detailHeader:SetText("")
+    self.detailHeader = detailHeader
+
+    local detailSubtitle = detailsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    detailSubtitle:SetPoint("TOPLEFT", detailHeader, "BOTTOMLEFT", 0, -2)
+    detailSubtitle:SetPoint("RIGHT", detailsFrame, "RIGHT", -8, 0)
+    detailSubtitle:SetJustifyH("LEFT")
+    detailSubtitle:SetTextColor(0.6, 0.6, 0.6)
+    detailSubtitle:SetText("")
+    self.detailSubtitle = detailSubtitle
+
+    local detailSeparator = detailsFrame:CreateTexture(nil, "ARTWORK")
+    detailSeparator:SetHeight(1)
+    detailSeparator:SetPoint("TOPLEFT", detailSubtitle, "BOTTOMLEFT", 0, -4)
+    detailSeparator:SetPoint("RIGHT", detailsFrame, "RIGHT", -8, 0)
+    detailSeparator:SetColorTexture(0.35, 0.35, 0.35, 0.8)
+    self.detailSeparator = detailSeparator
+
     -- Scrollable detail text area (prevents overlap with pin button)
     local detailScroll = CreateFrame("ScrollFrame", "FarmBuddySearchDetailScroll", detailsFrame)
-    detailScroll:SetPoint("TOPLEFT", scoreBar.frame, "BOTTOMLEFT", 0, -6)
+    detailScroll:SetPoint("TOPLEFT", detailSeparator, "BOTTOMLEFT", 0, -4)
     detailScroll:SetPoint("RIGHT", detailsFrame, "RIGHT", -24, 0)
     detailScroll:SetPoint("BOTTOM", pinBtn, "TOP", 0, 4)
     detailScroll:EnableMouseWheel(true)
@@ -213,11 +295,12 @@ function FB.UI.MountSearchTab:Init(parentPanel)
     self.detailChild = detailChild
     self.detailScrollBar = detailScrollBar
 
-    -- Loading label shown during async mount data load
-    loadingLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    loadingLabel:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", 5, -10)
-    loadingLabel:SetTextColor(0.7, 0.7, 0.7)
-    loadingLabel:Hide()
+    -- #21: Progress bar replaces plain loadingLabel during async mount load
+    progressBar = FB.UI.Widgets:CreateProgressBar(panel, "FBSearchProgress")
+    progressBar.frame:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", 0, -5)
+    progressBar.frame:SetPoint("RIGHT", panel, "RIGHT", -5, 0)
+    progressBar.frame:Hide()
+    -- No cancel callback needed for the load operation
 end
 
 function FB.UI.MountSearchTab:OnShow()
@@ -235,10 +318,11 @@ function FB.UI.MountSearchTab:LoadAllMounts()
     -- Set immediately to prevent re-entry (async runs over multiple frames)
     allMountData = {}
 
-    -- Show loading indicator
-    if loadingLabel then
-        loadingLabel:SetText("Loading mounts... 0 / " .. #mountIDs)
-        loadingLabel:Show()
+    -- #21: Show progress bar during async load, hide filter bar to avoid overlap
+    if progressBar then
+        progressBar:SetProgress(0, #mountIDs)
+        progressBar:SetText("Loading mounts... 0 / " .. #mountIDs)
+        progressBar.frame:Show()
     end
 
     loadHandle = FB.Async:RunBatched(
@@ -376,15 +460,17 @@ function FB.UI.MountSearchTab:LoadAllMounts()
         end,
         "auto",
         function(current, total)
-            if loadingLabel then
-                loadingLabel:SetText("Loading mounts... " .. current .. " / " .. total)
+            -- #21: Update progress bar
+            if progressBar then
+                progressBar:SetProgress(current, total)
+                progressBar:SetText("Loading mounts... " .. current .. " / " .. total)
             end
         end,
         function(results)
             loadHandle = nil
 
-            -- Hide loading indicator
-            if loadingLabel then loadingLabel:Hide() end
+            -- #21: Hide progress bar when complete
+            if progressBar then progressBar.frame:Hide() end
 
             -- Collect results and sort alphabetically
             allMountData = results
@@ -462,13 +548,20 @@ function FB.UI.MountSearchTab:SelectMount(item)
         scoreBar:SetScore(nil)
     end
 
-    -- Build rich detail lines using shared helper (true = show collected status)
-    local lines, steps = FB.Utils:BuildMountDetailLines(item, true)
+    -- #8: Use structured detail data to populate header, subtitle, and body separately
+    local detailData = FB.Utils:BuildMountDetailData(item, true)
+
+    if self.detailHeader then
+        self.detailHeader:SetText(detailData.name)
+    end
+    if self.detailSubtitle then
+        self.detailSubtitle:SetText(detailData.subtitle)
+    end
 
     -- Store resolved steps for the pin button
-    selectedMount._resolvedSteps = steps
+    selectedMount._resolvedSteps = detailData.steps
 
-    self.detailText:SetText(table.concat(lines, "\n"))
+    self.detailText:SetText(detailData.detailText)
 
     -- Resize scroll child to fit text and reset scroll position
     C_Timer.After(0, function()
@@ -496,10 +589,11 @@ function FB.UI.MountSearchTab:SelectMount(item)
         end
     end)
 
-    -- Show pin button for any uncollected mount
-    if not item.isCollected then
-        self.pinBtn:Show()
-    else
-        self.pinBtn:Hide()
+    -- #11: Show pin button for all mounts (collected or not — users may want to track them)
+    self.pinBtn:Show()
+
+    -- #11: Show WoWHead button for any selected mount
+    if self.wowheadBtn then
+        self.wowheadBtn:Show()
     end
 end

@@ -12,6 +12,13 @@ local headerLabels = {}
 local fontStringPool = {}
 local texturePool = {}
 
+-- Improvement #5: hit-rect buttons for interactivity
+local hitRectPool = {}
+local activeHitRects = {}
+
+-- Improvement #5: selected mount row index
+local selectedRowIdx = nil
+
 -- Filter state
 local allWeeklyMounts = {}
 local filteredMounts = {}
@@ -94,6 +101,18 @@ local function AcquireTexture(parent)
     return tex
 end
 
+-- Improvement #5: hit-rect button pool
+local function AcquireHitRect(parent)
+    local btn = table.remove(hitRectPool)
+    if not btn then
+        btn = CreateFrame("Button", nil, parent)
+    else
+        btn:SetParent(parent)
+    end
+    btn:Show()
+    return btn
+end
+
 local function ReleaseAll()
     for _, row in ipairs(gridRows) do
         for _, element in pairs(row) do
@@ -113,8 +132,19 @@ local function ReleaseAll()
         label:ClearAllPoints()
         fontStringPool[#fontStringPool + 1] = label
     end
+    -- Release hit-rects (improvement #5)
+    for _, btn in ipairs(activeHitRects) do
+        btn:Hide()
+        btn:ClearAllPoints()
+        btn:SetScript("OnEnter", nil)
+        btn:SetScript("OnLeave", nil)
+        btn:SetScript("OnClick", nil)
+        hitRectPool[#hitRectPool + 1] = btn
+    end
     gridRows = {}
     headerLabels = {}
+    activeHitRects = {}
+    selectedRowIdx = nil
 end
 
 -- Update the scrollbar range/value based on grid content
@@ -225,6 +255,44 @@ function FB.UI.WeeklyTab:Init(parentPanel)
     refreshBtn:SetScript("OnClick", function()
         FB.CharacterData:UpdateLockouts()
         FB.UI.WeeklyTab:RefreshGrid()
+    end)
+
+    -- Improvement #22: "Clear Attempts" button next to Refresh
+    local clearBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    clearBtn:SetSize(110, 24)
+    clearBtn:SetPoint("RIGHT", refreshBtn, "LEFT", -6, 0)
+    clearBtn:SetText("Clear Attempts")
+    -- Orange/warning color tint via vertex color
+    clearBtn:GetNormalTexture():SetVertexColor(1.0, 0.65, 0.1)
+    clearBtn:GetHighlightTexture():SetVertexColor(1.0, 0.8, 0.3)
+    clearBtn:SetScript("OnClick", function()
+        -- Confirmation dialog
+        StaticPopupDialogs["FARMBUDDY_CLEAR_ATTEMPTS"] = {
+            text = "Clear all mount attempt tracking data for this character?\n\nThis resets the 'This Week' filter history.",
+            button1 = "Clear",
+            button2 = "Cancel",
+            OnAccept = function()
+                if FB.db then
+                    FB.db.mountAttempts = {}
+                end
+                FB.UI.WeeklyTab:RefreshGrid()
+                FB:Print("Mount attempt tracking cleared.")
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("FARMBUDDY_CLEAR_ATTEMPTS")
+    end)
+    clearBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Clear Attempts")
+        GameTooltip:AddLine("Clears the mount attempt tracking data used\nby the 'This Week' filter for this character.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    clearBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
     end)
 
     -- Filter row (y = -30)
@@ -472,6 +540,17 @@ function FB.UI.WeeklyTab:RefreshGrid()
     self:RenderGrid()
 end
 
+-- Improvement #5: show row highlight on all cells in the same row
+local function SetRowHighlight(rowHighlightTextures, active)
+    for _, tex in ipairs(rowHighlightTextures) do
+        if active then
+            tex:SetColorTexture(0.3, 0.5, 1.0, 0.10)
+        else
+            tex:SetColorTexture(0.3, 0.5, 1.0, 0)
+        end
+    end
+end
+
 -- Render the filtered data to the grid
 function FB.UI.WeeklyTab:RenderGrid()
     ReleaseAll()
@@ -514,7 +593,6 @@ function FB.UI.WeeklyTab:RenderGrid()
     local startY = -5
 
     -- Auto-size character columns to fit available width
-    -- With icons instead of text, columns can be narrower
     local availableWidth = (scrollFrame:GetWidth() or 800) - MOUNT_COL_WIDTH - 20
     local numChars = math.max(1, #characters)
     local COL_WIDTH = math.max(40, math.min(120, math.floor(availableWidth / numChars)))
@@ -544,7 +622,35 @@ function FB.UI.WeeklyTab:RenderGrid()
         local row = {}
         local y = startY - (rowIdx * ROW_HEIGHT)
 
-        -- Mount name + instance
+        -- Per-row highlight textures (one per cell) for coordinated highlight
+        local rowHighlightTextures = {}
+
+        -- Mount name cell highlight bg
+        local mountHighlight = AcquireTexture(gridFrame)
+        mountHighlight:SetPoint("TOPLEFT", startX, y)
+        mountHighlight:SetSize(MOUNT_COL_WIDTH, ROW_HEIGHT)
+        mountHighlight:SetColorTexture(0.3, 0.5, 1.0, 0)
+        rowHighlightTextures[#rowHighlightTextures + 1] = mountHighlight
+
+        -- Character cell highlight bgs
+        local charHighlights = {}
+        for i = 1, #characters do
+            local ht = AcquireTexture(gridFrame)
+            ht:SetPoint("TOPLEFT", startX + MOUNT_COL_WIDTH + ((i - 1) * COL_WIDTH), y)
+            ht:SetSize(COL_WIDTH, ROW_HEIGHT)
+            ht:SetColorTexture(0.3, 0.5, 1.0, 0)
+            rowHighlightTextures[#rowHighlightTextures + 1] = ht
+            charHighlights[i] = ht
+        end
+
+        -- Selection highlight (solid blue tint shown on click)
+        local selHighlight = AcquireTexture(gridFrame)
+        selHighlight:SetPoint("TOPLEFT", startX, y)
+        selHighlight:SetSize(MOUNT_COL_WIDTH + (#characters * COL_WIDTH), ROW_HEIGHT)
+        selHighlight:SetColorTexture(0.2, 0.4, 0.9, 0)
+        row.selHighlight = selHighlight
+
+        -- Mount name label
         local mountLabel = AcquireFontString(gridFrame)
         mountLabel:SetPoint("TOPLEFT", startX, y)
         mountLabel:SetWidth(MOUNT_COL_WIDTH)
@@ -553,6 +659,66 @@ function FB.UI.WeeklyTab:RenderGrid()
         local icon = mount.icon and ("|T" .. mount.icon .. ":14:14|t ") or ""
         mountLabel:SetText(icon .. FB.Utils:Truncate(mount.name, 25))
         row.mountLabel = mountLabel
+
+        -- Improvement #5: hit-rect button over mount name cell
+        local mountHit = AcquireHitRect(gridFrame)
+        mountHit:SetPoint("TOPLEFT", startX, y)
+        mountHit:SetSize(MOUNT_COL_WIDTH, ROW_HEIGHT)
+        local mt = mount  -- capture
+        local rIdx = rowIdx  -- capture
+        local rHighlights = rowHighlightTextures  -- capture
+        local rSelHL = selHighlight  -- capture
+
+        mountHit:SetScript("OnEnter", function(self2)
+            SetRowHighlight(rHighlights, true)
+            -- Mount name tooltip
+            GameTooltip:SetOwner(self2, "ANCHOR_RIGHT")
+            GameTooltip:SetText(mt.name or "Unknown Mount", 1, 0.82, 0, true)
+            local src = mt.instanceName or mt.sourceText or "Unknown Source"
+            GameTooltip:AddLine("Source: " .. src, 0.8, 0.8, 0.8, false)
+            if mt.dropChance then
+                GameTooltip:AddLine(string.format("Drop Chance: %.1f%%", mt.dropChance * 100), 0.8, 0.9, 0.6, false)
+            else
+                GameTooltip:AddLine("Drop Chance: Unknown", 0.7, 0.7, 0.7, false)
+            end
+            local tgStr = mt.timeGate or "weekly"
+            GameTooltip:AddLine("Time Gate: " .. tgStr:gsub("^%l", string.upper), 0.7, 0.9, 1.0, false)
+            GameTooltip:AddLine(" ", 1, 1, 1)
+            GameTooltip:AddLine("Click to select  |  Ctrl+Click for Mount Journal", 0.5, 0.5, 0.5, true)
+            GameTooltip:Show()
+        end)
+        mountHit:SetScript("OnLeave", function()
+            SetRowHighlight(rHighlights, false)
+            GameTooltip:Hide()
+        end)
+        mountHit:SetScript("OnClick", function(self2, button)
+            if IsControlKeyDown() then
+                -- Ctrl+Click: open Mount Journal
+                if C_MountJournal then
+                    if not IsAddOnLoaded("Blizzard_Collections") then
+                        pcall(LoadAddOn, "Blizzard_Collections")
+                    end
+                    if MountJournal_LoadUI then pcall(MountJournal_LoadUI) end
+                    if CollectionsJournal and not CollectionsJournal:IsShown() then
+                        pcall(ShowUIPanel, CollectionsJournal)
+                    end
+                    if C_MountJournal.SetSearch then
+                        C_MountJournal.SetSearch(mt.name or "")
+                    end
+                end
+            else
+                -- Regular click: select row (visual highlight)
+                -- Clear previously selected row's selection highlight
+                for _, r in ipairs(gridRows) do
+                    if r.selHighlight then
+                        r.selHighlight:SetColorTexture(0.2, 0.4, 0.9, 0)
+                    end
+                end
+                selectedRowIdx = rIdx
+                rSelHL:SetColorTexture(0.2, 0.4, 0.9, 0.15)
+            end
+        end)
+        activeHitRects[#activeHitRects + 1] = mountHit
 
         -- Status per character
         for i, char in ipairs(characters) do
@@ -575,6 +741,59 @@ function FB.UI.WeeklyTab:RenderGrid()
             end
 
             row["char" .. i] = statusLabel
+
+            -- Improvement #5: hit-rect over character lockout cell
+            local charHit = AcquireHitRect(gridFrame)
+            charHit:SetPoint("TOPLEFT", startX + MOUNT_COL_WIDTH + ((i - 1) * COL_WIDTH), y)
+            charHit:SetSize(COL_WIDTH, ROW_HEIGHT)
+            local cd = charData  -- capture
+            local ch = char      -- capture
+            local crHL = rHighlights -- capture
+
+            charHit:SetScript("OnEnter", function(self2)
+                SetRowHighlight(crHL, true)
+                -- Character lockout tooltip
+                GameTooltip:SetOwner(self2, "ANCHOR_RIGHT")
+                local classColor = FB.CLASS_COLORS[ch.class] or "FFFFFF"
+                local shortName = ch.key:match("^(.-)%s*-") or ch.key
+                GameTooltip:SetText("|cFF" .. classColor .. shortName .. "|r", 1, 1, 1, false)
+                if ch.class then
+                    GameTooltip:AddLine(ch.class:gsub("^%l", string.upper), 0.7, 0.7, 0.7, false)
+                end
+                GameTooltip:AddLine(" ", 1, 1, 1)
+                if cd then
+                    if cd.locked then
+                        local resetStr = "Unknown"
+                        if cd.resetTime and cd.resetTime > 0 then
+                            local remaining = cd.resetTime - time()
+                            if remaining > 0 then
+                                local days = math.floor(remaining / 86400)
+                                local hours = math.floor((remaining % 86400) / 3600)
+                                if days > 0 then
+                                    resetStr = string.format("%dd %dh", days, hours)
+                                else
+                                    resetStr = string.format("%dh", hours)
+                                end
+                            else
+                                resetStr = "Resetting soon"
+                            end
+                        end
+                        GameTooltip:AddLine("|TInterface\\RAIDFRAME\\ReadyCheck-NotReady:14:14|t Locked", 1, 0.4, 0.4, false)
+                        GameTooltip:AddLine("Resets in: " .. resetStr, 0.8, 0.8, 0.8, false)
+                    else
+                        GameTooltip:AddLine("|TInterface\\RAIDFRAME\\ReadyCheck-Ready:14:14|t Available", 0.4, 1.0, 0.4, false)
+                        GameTooltip:AddLine("Not attempted this reset.", 0.7, 0.7, 0.7, false)
+                    end
+                else
+                    GameTooltip:AddLine(FB.COLORS.GRAY .. "No data for this character|r", 0.6, 0.6, 0.6, false)
+                end
+                GameTooltip:Show()
+            end)
+            charHit:SetScript("OnLeave", function()
+                SetRowHighlight(crHL, false)
+                GameTooltip:Hide()
+            end)
+            activeHitRects[#activeHitRects + 1] = charHit
         end
 
         -- Row separator

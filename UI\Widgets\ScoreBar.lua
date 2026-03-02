@@ -34,6 +34,15 @@ function FB.UI.Widgets:CreateScoreBar(parent, name)
         effort   = "Total Effort",
     }
 
+    -- #2: Tooltip descriptions for each component
+    local COMPONENT_TOOLTIPS = {
+        progress = "How much pre-work (rep, quests, currency) is required before farming",
+        time     = "How long each farming attempt takes (travel + clear time)",
+        gate     = "How frequently you can attempt this (daily, weekly, etc.)",
+        group    = "Whether you need other players (solo = easiest)",
+        effort   = "Overall estimated days to acquire this mount",
+    }
+
     -- Score text
     local scoreLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     scoreLabel:SetPoint("TOPLEFT", 0, 0)
@@ -68,7 +77,31 @@ function FB.UI.Widgets:CreateScoreBar(parent, name)
         valueText:SetWidth(40)
         valueText:SetJustifyH("LEFT")
 
-        bars[key] = { label = label, bg = bg, fill = fill, valueText = valueText }
+        -- #2: Create a mouseable region over the bar area for tooltip
+        local barRow = CreateFrame("Frame", nil, frame)
+        barRow:SetPoint("LEFT", label, "LEFT", 0, 0)
+        -- Width covers label + bg + valueText area
+        barRow:SetWidth(80 + 4 + 150 + 4 + 40)
+        barRow:SetHeight(12)
+        barRow:SetPoint("TOP", label, "TOP", 0, 0)
+        -- Store reference to current value for tooltip
+        barRow.currentValue = 0
+        barRow.componentKey = key
+
+        barRow:SetScript("OnEnter", function(self)
+            local bar = bars[self.componentKey]
+            local val = bar and bar.currentValue or 0
+            GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+            GameTooltip:SetText(COMPONENT_LABELS[self.componentKey], 1, 1, 1)
+            GameTooltip:AddLine(COMPONENT_TOOLTIPS[self.componentKey], 0.8, 0.8, 0.8, true)
+            GameTooltip:AddLine(string.format("Current value: %.0f", val), 0.6, 0.9, 0.6)
+            GameTooltip:Show()
+        end)
+        barRow:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
+
+        bars[key] = { label = label, bg = bg, fill = fill, valueText = valueText, barRow = barRow, currentValue = 0 }
         barY = barY - 14
     end
     widget.bars = bars
@@ -83,6 +116,7 @@ function FB.UI.Widgets:CreateScoreBar(parent, name)
             for _, bar in pairs(bars) do
                 bar.fill:SetWidth(1)
                 bar.valueText:SetText("")
+                bar.currentValue = 0
             end
             return
         end
@@ -102,6 +136,7 @@ function FB.UI.Widgets:CreateScoreBar(parent, name)
             local ratio = math.min(value / SCORE_BAR_MAX, 1.0)
             bar.fill:SetWidth(math.max(1, 150 * ratio))
             bar.valueText:SetText(string.format("%.0f", value))
+            bar.currentValue = value  -- #2: store for tooltip display
         end
     end
 

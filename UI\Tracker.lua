@@ -232,6 +232,23 @@ function FB.Tracker:Refresh()
     local unpinIdx = 0
     local hasContent = false
 
+    -- Build a set of completed criteria descriptions for an achievement (for step matching)
+    local function GetCompletedCriteriaForAchievement(achievementID)
+        local completed = {}
+        if not GetAchievementNumCriteria then return completed end
+        local numCriteria = GetAchievementNumCriteria(achievementID)
+        if not numCriteria then return completed end
+        for i = 1, numCriteria do
+            local ok, criteriaString, _, criteriaCompleted = pcall(
+                GetAchievementCriteriaInfo, achievementID, i
+            )
+            if ok and criteriaCompleted and criteriaString then
+                completed[criteriaString] = true
+            end
+        end
+        return completed
+    end
+
     -- Helper to add one pinned item
     local function AddPinnedItem(itemType, id, data, color)
         hasContent = true
@@ -252,14 +269,34 @@ function FB.Tracker:Refresh()
 
         -- Steps
         if data.steps and #data.steps > 0 then
+            -- #13: For achievements, check live criteria completion to mark steps
+            local completedCriteria = {}
+            if itemType == "achievement" and id and id ~= 0 then
+                completedCriteria = GetCompletedCriteriaForAchievement(id)
+            end
+
             for _, step in ipairs(data.steps) do
+                -- #13: Determine if this step is completed
+                local isCompleted = completedCriteria[step] == true
+
                 lineIdx = lineIdx + 1
                 local stepLine = AcquireLine(lineIdx)
                 stepLine:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
                 stepLine:SetWidth(232)
-                stepLine:SetTextColor(0.75, 0.75, 0.75, 1.0)
                 stepLine:SetPoint("TOPLEFT", trackerFrame, "TOPLEFT", 28, yOffset)
-                stepLine:SetText("- " .. step)
+
+                if isCompleted then
+                    -- Green checkmark texture + grayed-out text
+                    stepLine:SetTextColor(0.5, 0.5, 0.5, 1.0)
+                    stepLine:SetText(
+                        "|TInterface\\RAIDFRAME\\ReadyCheck-Ready:10:10|t |cFF888888" .. step .. "|r"
+                    )
+                else
+                    -- White bullet for pending steps
+                    stepLine:SetTextColor(0.8, 0.8, 0.8, 1.0)
+                    stepLine:SetText("|cFFFFFFFF" .. "\xE2\x80\xa2" .. "|r " .. step)
+                end
+
                 -- Calculate the height of the step text
                 local textHeight = stepLine:GetStringHeight()
                 if textHeight and textHeight > 0 then

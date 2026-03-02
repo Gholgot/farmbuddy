@@ -166,6 +166,9 @@ end
 function FB.UI.ExpansionProgressTab:Render()
     if not expansionData or not contentFrame then return end
 
+    -- #16: Save scroll position before clearing rows
+    local savedScroll = scrollFrame and scrollFrame:GetVerticalScroll() or 0
+
     ClearRows()
 
     local y = -5
@@ -347,25 +350,80 @@ function FB.UI.ExpansionProgressTab:Render()
                             end
                         end
 
-                        -- Ctrl+Click to open mount journal
+                        -- Click: show tooltip with rich info; Ctrl+Click: open Mount Journal
                         mountRow:SetScript("OnClick", function()
                             if IsControlKeyDown() then
                                 FB.Utils:OpenMountJournal(mount.mountID)
                             end
+                            -- Regular click: tooltip already visible via OnEnter, no extra action needed
                         end)
 
-                        -- Tooltip
+                        -- Rich tooltip on hover
                         mountRow:SetScript("OnEnter", function(self)
                             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                            GameTooltip:SetText(mount.name)
-                            GameTooltip:AddLine(FB.SOURCE_TYPE_NAMES[mount.sourceType] or "Unknown", 0.7, 0.7, 0.7)
+                            -- Mount name as header
                             if mount.isCollected then
-                                GameTooltip:AddLine("Collected", 0, 1, 0)
+                                GameTooltip:SetText(FB.COLORS.GREEN .. mount.name .. "|r")
                             else
-                                GameTooltip:AddLine("Not Collected", 1, 0, 0)
+                                GameTooltip:SetText(mount.name)
                             end
+
+                            -- Source type
+                            local srcName = FB.SOURCE_TYPE_NAMES[mount.sourceType] or "Unknown"
+                            GameTooltip:AddLine("Source: " .. srcName, 0.8, 0.8, 0.8)
+
+                            -- Drop chance (for drop-type sources)
+                            if FB.DROP_SOURCE_TYPES and FB.DROP_SOURCE_TYPES[mount.sourceType] then
+                                -- Look up cached score data for drop chance
+                                local dropChanceStr = nil
+                                if FB.db and FB.db.cachedMountScores then
+                                    for _, cached in ipairs(FB.db.cachedMountScores) do
+                                        if cached.mountID == mount.mountID then
+                                            if cached.dropChance and cached.dropChance > 0 then
+                                                dropChanceStr = string.format("%.2f%%", cached.dropChance * 100)
+                                            end
+                                            break
+                                        end
+                                    end
+                                end
+                                if dropChanceStr then
+                                    GameTooltip:AddLine("Drop Chance: " .. dropChanceStr, 0.7, 0.9, 1.0)
+                                end
+                            end
+
+                            -- Group requirement (from cached score data)
+                            if FB.db and FB.db.cachedMountScores then
+                                for _, cached in ipairs(FB.db.cachedMountScores) do
+                                    if cached.mountID == mount.mountID then
+                                        if cached.groupRequirement and cached.groupRequirement ~= "solo" then
+                                            local grpName = FB.GROUP_NAMES and FB.GROUP_NAMES[cached.groupRequirement]
+                                                or cached.groupRequirement
+                                            GameTooltip:AddLine("Requires: " .. grpName, 1.0, 0.6, 0.2)
+                                        end
+                                        break
+                                    end
+                                end
+                            end
+
+                            -- Faction restriction
+                            if mount.faction then
+                                if mount.faction == "ALLIANCE" or mount.faction == 0 then
+                                    GameTooltip:AddLine("Alliance Only", 0.0, 0.44, 0.87)
+                                else
+                                    GameTooltip:AddLine("Horde Only", 0.87, 0.13, 0.13)
+                                end
+                            end
+
+                            -- Collection status
                             GameTooltip:AddLine(" ")
-                            GameTooltip:AddLine("Ctrl+Click to open in Mount Journal", 0.5, 0.5, 0.5)
+                            if mount.isCollected then
+                                GameTooltip:AddLine("|TInterface\\RAIDFRAME\\ReadyCheck-Ready:14:14|t Collected", 0, 1, 0)
+                            else
+                                GameTooltip:AddLine("|TInterface\\RAIDFRAME\\ReadyCheck-NotReady:14:14|t Not Collected", 1, 0.2, 0.2)
+                            end
+
+                            GameTooltip:AddLine(" ")
+                            GameTooltip:AddLine("Click to focus  |  Ctrl+Click: Mount Journal", 0.5, 0.5, 0.5)
                             GameTooltip:Show()
                         end)
                         mountRow:SetScript("OnLeave", function()
@@ -391,10 +449,14 @@ function FB.UI.ExpansionProgressTab:Render()
     local maxScroll = math.max(0, contentFrame:GetHeight() - scrollFrame:GetHeight())
     if maxScroll <= 0 then
         scrollBar:Hide()
+        scrollFrame:SetVerticalScroll(0)
     else
         scrollBar:Show()
         scrollBar:SetMinMaxValues(0, maxScroll)
-        scrollBar:SetValue(math.min(scrollBar:GetValue() or 0, maxScroll))
+        -- #16: Restore previous scroll position (clamped to new max)
+        local restoredScroll = math.min(savedScroll, maxScroll)
+        scrollFrame:SetVerticalScroll(restoredScroll)
+        scrollBar:SetValue(restoredScroll)
     end
 end
 

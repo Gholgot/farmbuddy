@@ -645,6 +645,60 @@ function FB.Utils:BuildMountAutoSteps(item)
     return steps
 end
 
+-- Build structured detail data for the detail panel header area.
+-- Separates name, subtitle, and body text so tabs can display them in distinct FontStrings.
+-- @param item  table - enriched mount data
+-- @param showCollected bool - whether to include collected status in subtitle
+-- @return table { name, subtitle, detailText, steps }
+function FB.Utils:BuildMountDetailData(item, showCollected)
+    local lines, steps = self:BuildMountDetailLines(item, showCollected)
+
+    -- BuildMountDetailLines structure:
+    --   [1] = gold-colored name line
+    --   [2] = "" (blank spacer)
+    --   [3] = (if showCollected) collected status line, otherwise info summary line
+    --   [4] = (if showCollected) info summary line, otherwise faction/score/detail...
+    -- We pull name and subtitle ourselves and skip those header lines in detailText.
+
+    local name = item.name or ""
+
+    -- Build subtitle: source type + expansion
+    local subtitleParts = {}
+    subtitleParts[#subtitleParts + 1] = FB.SOURCE_TYPE_NAMES[item.sourceType] or "Unknown"
+    if item.expansion then
+        subtitleParts[#subtitleParts + 1] = FB.EXPANSION_NAMES[item.expansion] or item.expansion
+    end
+    -- Append collected status to subtitle when requested
+    if showCollected then
+        if item.isCollected then
+            subtitleParts[#subtitleParts + 1] = FB.COLORS.GREEN .. "Collected|r"
+        else
+            subtitleParts[#subtitleParts + 1] = FB.COLORS.RED .. "Not Collected|r"
+        end
+    end
+    local subtitle = table.concat(subtitleParts, "  -  ")
+
+    -- Determine how many leading lines to skip in the lines table:
+    --   Always skip: [1] name, [2] blank, and the info summary line.
+    --   When showCollected: also skip the collected status line (it's now in subtitle).
+    -- The info summary line position:
+    --   showCollected=true  -> [3]=collected, [4]=info summary -> skip first 4
+    --   showCollected=false -> [3]=info summary -> skip first 3
+    local skipCount = showCollected and 4 or 3
+
+    local detailLines = {}
+    for i = skipCount + 1, #lines do
+        detailLines[#detailLines + 1] = lines[i]
+    end
+
+    return {
+        name = name,
+        subtitle = subtitle,
+        detailText = table.concat(detailLines, "\n"),
+        steps = steps,
+    }
+end
+
 -- Build rich detail lines for a mount (shared between Search and Recommend tabs)
 -- @param item  table - enriched mount data (from Resolver + Scorer)
 -- @param showCollected bool - whether to show collected/not collected status

@@ -99,21 +99,9 @@ function FB.UI:CreateMainFrame()
     title:SetPoint("TOPLEFT", 12, -8)
     title:SetText(FB.ADDON_COLOR .. "FarmBuddy|r")
 
-    -- Close button (manual - avoids template issues)
-    local closeBtn = CreateFrame("Button", nil, mainFrame)
-    closeBtn:SetSize(24, 24)
-    closeBtn:SetPoint("TOPRIGHT", -10, -10)
-    closeBtn:SetNormalFontObject("GameFontNormalLarge")
-    closeBtn:SetText("X")
-
-    local closeBg = closeBtn:CreateTexture(nil, "BACKGROUND")
-    closeBg:SetAllPoints()
-    closeBg:SetColorTexture(0.5, 0.0, 0.0, 0.3)
-
-    local closeHighlight = closeBtn:CreateTexture(nil, "HIGHLIGHT")
-    closeHighlight:SetAllPoints()
-    closeHighlight:SetColorTexture(1.0, 0.0, 0.0, 0.3)
-
+    -- Close button: use standard WoW UIPanelCloseButton template for proper appearance
+    local closeBtn = CreateFrame("Button", nil, mainFrame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", -4, -4)
     closeBtn:SetScript("OnClick", function()
         mainFrame:Hide()
     end)

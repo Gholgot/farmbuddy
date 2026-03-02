@@ -28,7 +28,7 @@ function FB.UI.AchievementTab:Init(parentPanel)
     catLabel:SetText("Category:")
 
     local catBtn = CreateFrame("Button", "FarmBuddyAchCategoryBtn", panel, "BackdropTemplate")
-    catBtn:SetSize(250, 24)
+    catBtn:SetSize(220, 24)
     catBtn:SetPoint("LEFT", catLabel, "RIGHT", 8, 0)
     catBtn:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -56,7 +56,7 @@ function FB.UI.AchievementTab:Init(parentPanel)
     -- Current zone button
     local zoneBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     zoneBtn:SetSize(110, 24)
-    zoneBtn:SetPoint("LEFT", catBtn, "RIGHT", 8, 0)
+    zoneBtn:SetPoint("LEFT", catBtn, "RIGHT", 6, 0)
     zoneBtn:SetText("Current Zone")
     zoneBtn:SetScript("OnClick", function()
         local catID, zoneName = FB.ZoneGrouper:GetCurrentZoneCategory()
@@ -69,9 +69,28 @@ function FB.UI.AchievementTab:Init(parentPanel)
         end
     end)
 
+    -- Improvement #15: "Scan All Mounts" button
+    local scanAllMountsBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    scanAllMountsBtn:SetSize(130, 24)
+    scanAllMountsBtn:SetPoint("LEFT", zoneBtn, "RIGHT", 6, 0)
+    scanAllMountsBtn:SetText("Scan All (Mounts)")
+    scanAllMountsBtn:SetScript("OnClick", function()
+        FB.UI.AchievementTab:StartScanAllMounts()
+    end)
+    scanAllMountsBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Scan All Mount Achievements")
+        GameTooltip:AddLine("Scans every achievement across all categories\nand filters results to mount rewards only.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    scanAllMountsBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    self.scanAllMountsBtn = scanAllMountsBtn
+
     -- Scan button
     local scanBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    scanBtn:SetSize(80, 24)
+    scanBtn:SetSize(70, 24)
     scanBtn:SetPoint("TOPRIGHT", -5, -28)
     scanBtn:SetText("Scan")
     scanBtn:SetScript("OnClick", function()
@@ -272,22 +291,16 @@ function FB.UI.AchievementTab:ShowCategoryMenu()
         local ok, err = pcall(function()
             MenuUtil.CreateContextMenu(catBtn, function(ownerRegion, rootDescription)
                 -- Build hierarchical menu
-                -- WoW 12.0 API: CreateButton(text) without callback returns an element
-                -- description. Adding children to it makes it a submenu automatically.
                 for _, root in ipairs(roots) do
                     if root.children and #root.children > 0 then
-                        -- Create submenu: no callback = returns element description
                         local submenu = rootDescription:CreateButton(root.name)
 
-                        -- "All of [root]" option at top of submenu
                         submenu:CreateButton("|cFFFFD200All " .. root.name .. "|r", function()
                             selectCategory(root.id, root.name)
                         end)
 
-                        -- Subcategories
                         for _, child in ipairs(root.children) do
                             if child.children and #child.children > 0 then
-                                -- Nested submenu (3rd level)
                                 local childSubmenu = submenu:CreateButton(child.name)
                                 childSubmenu:CreateButton("|cFFFFD200All " .. child.name .. "|r", function()
                                     selectCategory(child.id, child.name)
@@ -298,14 +311,12 @@ function FB.UI.AchievementTab:ShowCategoryMenu()
                                     end)
                                 end
                             else
-                                -- Leaf button in submenu
                                 submenu:CreateButton(child.name, function()
                                     selectCategory(child.id, child.name)
                                 end)
                             end
                         end
                     else
-                        -- No children - direct clickable button
                         rootDescription:CreateButton(root.name, function()
                             selectCategory(root.id, root.name)
                         end)
@@ -319,7 +330,6 @@ function FB.UI.AchievementTab:ShowCategoryMenu()
             self:ShowCategoryMenuFallback(roots)
         end
     else
-        -- Fallback: scrollable panel-based menu
         self:ShowCategoryMenuFallback(roots)
     end
 end
@@ -328,13 +338,11 @@ end
 function FB.UI.AchievementTab:ShowCategoryMenuFallback(roots)
     local catBtn = FarmBuddyAchCategoryBtn
 
-    -- Reuse existing frame or create once (avoids frame leak)
     if self.fallbackMenu then
         if self.fallbackMenu:IsShown() then
             self.fallbackMenu:Hide()
             return
         end
-        -- Clear old children
         if self.fallbackScrollContent then
             local children = { self.fallbackScrollContent:GetChildren() }
             for _, child in ipairs(children) do
@@ -358,7 +366,6 @@ function FB.UI.AchievementTab:ShowCategoryMenuFallback(roots)
         listFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
         self.fallbackMenu = listFrame
 
-        -- Clear OnUpdate when hidden to avoid wasting CPU
         listFrame:SetScript("OnHide", function(self)
             self:SetScript("OnUpdate", nil)
         end)
@@ -366,7 +373,6 @@ function FB.UI.AchievementTab:ShowCategoryMenuFallback(roots)
     listFrame:ClearAllPoints()
     listFrame:SetPoint("TOPLEFT", catBtn, "BOTTOMLEFT", 0, -2)
 
-    -- Scrollable content (reuse or create)
     local scrollFrame = self.fallbackScrollFrame
     if not scrollFrame then
         scrollFrame = CreateFrame("ScrollFrame", nil, listFrame)
@@ -399,7 +405,6 @@ function FB.UI.AchievementTab:ShowCategoryMenuFallback(roots)
         text:SetAllPoints()
         text:SetJustifyH("LEFT")
 
-        -- Color root categories gold, subcategories white
         if depth == 0 then
             text:SetText(FB.COLORS.GOLD .. cat.name .. "|r")
         elseif depth == 1 then
@@ -417,7 +422,6 @@ function FB.UI.AchievementTab:ShowCategoryMenuFallback(roots)
         yOff = yOff - 20
     end
 
-    -- Build the list with hierarchy
     for _, root in ipairs(roots) do
         AddCategoryButton(root, 0)
         if root.children then
@@ -434,7 +438,6 @@ function FB.UI.AchievementTab:ShowCategoryMenuFallback(roots)
 
     content:SetHeight(math.abs(yOff) + 4)
 
-    -- Mouse wheel scroll
     local scrollAmount = 0
     scrollFrame:SetScript("OnMouseWheel", function(self, delta)
         scrollAmount = scrollAmount - delta * 40
@@ -442,7 +445,6 @@ function FB.UI.AchievementTab:ShowCategoryMenuFallback(roots)
         scrollFrame:SetVerticalScroll(scrollAmount)
     end)
 
-    -- Auto-close when clicking elsewhere
     listFrame:SetScript("OnShow", function(frame)
         frame:SetScript("OnUpdate", function(frame)
             if not MouseIsOver(frame) and not MouseIsOver(catBtn) then
@@ -460,6 +462,7 @@ function FB.UI.AchievementTab:StartScan()
     if not currentCategoryID then return end
 
     self.scanBtn:Disable()
+    if self.scanAllMountsBtn then self.scanAllMountsBtn:Disable() end
     progressBar:Show()
     filterBar.frame:Hide()
     scrollList:SetData({})
@@ -477,9 +480,127 @@ function FB.UI.AchievementTab:StartScan()
             progressBar:Hide()
             filterBar.frame:Show()
             self.scanBtn:Enable()
+            if self.scanAllMountsBtn then self.scanAllMountsBtn:Enable() end
             scanHandle = nil
             self:ApplyFilters()
             self.statusLabel:SetText(string.format("%d achievements found", #results))
+        end
+    )
+end
+
+-- Improvement #15: Scan ALL achievements across all categories, filtered to mount rewards
+function FB.UI.AchievementTab:StartScanAllMounts()
+    self.scanBtn:Disable()
+    if self.scanAllMountsBtn then self.scanAllMountsBtn:Disable() end
+    progressBar:Show()
+    filterBar.frame:Hide()
+    scrollList:SetData({})
+    if self.scoreBar then self.scoreBar:SetScore(nil) end
+    self.detailText:SetText("")
+    self.pinBtn:Hide()
+
+    -- Update category display
+    self.catText:SetText(FB.COLORS.GOLD .. "All (Mount Rewards)|r")
+    currentCategoryID = nil
+
+    -- Collect all achievement IDs using modern API or fallback
+    local allIDs = {}
+    if C_AchievementInfo and C_AchievementInfo.GetAchievementIDs then
+        local ok, ids = pcall(C_AchievementInfo.GetAchievementIDs)
+        if ok and ids then
+            allIDs = ids
+        end
+    end
+
+    if #allIDs == 0 then
+        -- Fallback: gather from all categories via GetCategoryList
+        local ok, allCategories = pcall(GetCategoryList)
+        if ok and allCategories then
+            local seen = {}
+            for _, catID in ipairs(allCategories) do
+                local numOk, numAch = pcall(GetCategoryNumAchievements, catID, false)
+                if numOk and numAch and numAch > 0 then
+                    for i = 1, numAch do
+                        local achOk, achID = pcall(GetAchievementInfo, catID, i)
+                        if achOk and achID and not seen[achID] then
+                            seen[achID] = true
+                            allIDs[#allIDs + 1] = achID
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if #allIDs == 0 then
+        progressBar:Hide()
+        filterBar.frame:Show()
+        self.scanBtn:Enable()
+        if self.scanAllMountsBtn then self.scanAllMountsBtn:Enable() end
+        FB:Print("No achievement IDs found.")
+        return
+    end
+
+    FB:Debug("Scan All Mounts: scanning " .. #allIDs .. " achievement IDs")
+
+    local batchSize = (FB.db and FB.db.settings and FB.db.settings.scan and FB.db.settings.scan.batchSize) or 5
+    local weights = FB.Scoring:GetWeights()
+
+    scanHandle = FB.Async:RunBatched(
+        allIDs,
+        function(achID)
+            local input = FB.Achievements.Resolver:Resolve(achID)
+            if not input then return nil end
+            -- Filter: only mount reward achievements
+            if input.rewardType ~= "mount" then return nil end
+
+            local result = FB.Scoring:Score(input, weights)
+            return {
+                id = input.id,
+                name = input.name,
+                icon = input.icon,
+                description = input.description,
+                points = input.points,
+                rewardText = input.rewardText,
+                rewardType = input.rewardType,
+                categoryID = input.categoryID,
+                categoryName = input.categoryName,
+                progressRemaining = input.progressRemaining,
+                totalCriteria = input.totalCriteria,
+                completedCriteria = input.completedCriteria,
+                remainingCriteria = input.remainingCriteria,
+                criteriaDetails = input.criteriaDetails,
+                groupRequirement = input.groupRequirement,
+                timeGate = input.timeGate,
+                effectiveDays = result.effectiveDays,
+                score = result.score,
+                components = result.components,
+                immediatelyAvailable = result.immediatelyAvailable,
+                confidence = result.confidence,
+            }
+        end,
+        batchSize,
+        function(current, total)
+            progressBar:SetProgress(current, total)
+        end,
+        function(results)
+            -- Sort by score ascending (lower = higher priority)
+            table.sort(results, function(a, b)
+                if a.score ~= b.score then return a.score < b.score end
+                return (a.name or "") < (b.name or "")
+            end)
+            scanResults = results
+            progressBar:Hide()
+            filterBar.frame:Show()
+            self.scanBtn:Enable()
+            if self.scanAllMountsBtn then self.scanAllMountsBtn:Enable() end
+            scanHandle = nil
+            -- Force reward type filter to mount in the filter bar
+            if filterBar and filterBar.SetDropdownValue then
+                pcall(filterBar.SetDropdownValue, filterBar, "rewardType", "mount")
+            end
+            self:ApplyFilters()
+            self.statusLabel:SetText(string.format("%d mount achievements found", #results))
         end
     )
 end
@@ -492,6 +613,7 @@ function FB.UI.AchievementTab:CancelScan()
     progressBar:Hide()
     filterBar.frame:Show()
     self.scanBtn:Enable()
+    if self.scanAllMountsBtn then self.scanAllMountsBtn:Enable() end
 end
 
 function FB.UI.AchievementTab:ApplyFilters()

@@ -21,6 +21,7 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
     widget.onCtrlClick = nil
     widget.rows = {}
     widget.scrollOffset = 0
+    widget.selectedIndex = nil  -- #7: track selected row
 
     -- Main container
     local frame = CreateFrame("Frame", name, parent, "BackdropTemplate")
@@ -144,14 +145,50 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
                     widget.onCtrlClick(item)
                 elseif widget.onClick then
                     widget.onClick(item)
+                    widget:SetSelected(self.dataIndex)  -- #7: update selection on click
                 end
+                -- #24: give keyboard focus to the list frame on click
+                frame:SetFocus()
             end
         end)
 
-        -- Tooltip hint for Ctrl+Click
+        -- #1: Rich tooltip on hover
         row:SetScript("OnEnter", function(self)
             self.highlight:Show()
-            if widget.onCtrlClick and self.dataIndex then
+            if self.dataIndex and self.dataIndex <= #widget.filteredData then
+                local item = widget.filteredData[self.dataIndex]
+                GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+                -- Line 1: mount name (white, bold)
+                GameTooltip:SetText(item.name or "Unknown", 1, 1, 1)
+                -- Line 2: source + expansion (gray)
+                local sourceLabel = FB.SOURCE_TYPE_NAMES and (FB.SOURCE_TYPE_NAMES[item.sourceType] or item.sourceType) or (item.sourceType or "")
+                local expansionLabel = item.expansion and (FB.EXPANSION_NAMES and (FB.EXPANSION_NAMES[item.expansion] or item.expansion) or item.expansion) or ""
+                local sourceLine = sourceLabel
+                if expansionLabel ~= "" then
+                    sourceLine = sourceLine ~= "" and (sourceLine .. " - " .. expansionLabel) or expansionLabel
+                end
+                if sourceLine ~= "" then
+                    GameTooltip:AddLine(sourceLine, 0.6, 0.6, 0.6)
+                end
+                -- Line 3: drop chance
+                if item.dropChance and item.dropChance > 0 then
+                    GameTooltip:AddLine(string.format("Drop rate: %.2f%%", item.dropChance * 100), 0.8, 0.8, 0.8)
+                else
+                    GameTooltip:AddLine("Drop rate: unknown", 1.0, 0.6, 0.2)
+                end
+                -- Line 4: time estimate
+                if item.effectiveDays then
+                    local timeStr = FB.Utils and FB.Utils.FormatDays and ("~" .. FB.Utils:FormatDays(item.effectiveDays)) or ("~" .. math.ceil(item.effectiveDays) .. "d")
+                    GameTooltip:AddLine("Estimated time: " .. timeStr, 0.8, 0.8, 0.8)
+                end
+                -- Line 5: group requirement
+                if item.groupRequirement and item.groupRequirement ~= "solo" then
+                    GameTooltip:AddLine("Requires: " .. item.groupRequirement, 0.9, 0.7, 0.3)
+                end
+                -- Last line: interaction hint (gray)
+                GameTooltip:AddLine("Click to select  |  Ctrl+Click for Mount Journal", 0.5, 0.5, 0.5)
+                GameTooltip:Show()
+            elseif widget.onCtrlClick then
                 GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
                 GameTooltip:SetText("Ctrl+Click to open in Mount Journal", 1, 1, 1)
                 GameTooltip:Show()
@@ -163,6 +200,44 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
 
         return row
     end
+
+    -- #7: SetSelected — update selectedIndex and refresh display
+    function widget:SetSelected(dataIndex)
+        self.selectedIndex = dataIndex
+        self:Refresh()
+    end
+
+    -- #24: Scroll into view for a given dataIndex
+    local function ScrollIntoView(dataIndex)
+        if not dataIndex then return end
+        local visibleRows = GetVisibleRows()
+        local offset = widget.scrollOffset
+        if dataIndex < offset + 1 then
+            scrollBar:SetValue(dataIndex - 1)
+        elseif dataIndex > offset + visibleRows then
+            scrollBar:SetValue(dataIndex - visibleRows)
+        end
+    end
+
+    -- #24: Keyboard navigation
+    frame:EnableKeyboard(false)  -- enabled when items are loaded
+    frame:SetScript("OnKeyDown", function(self, key)
+        if key == "UP" then
+            local newIdx = math.max(1, (widget.selectedIndex or 1) - 1)
+            widget:SetSelected(newIdx)
+            ScrollIntoView(newIdx)
+            if widget.onClick and widget.filteredData[newIdx] then
+                widget.onClick(widget.filteredData[newIdx])
+            end
+        elseif key == "DOWN" then
+            local newIdx = math.min(#widget.filteredData, (widget.selectedIndex or 0) + 1)
+            widget:SetSelected(newIdx)
+            ScrollIntoView(newIdx)
+            if widget.onClick and widget.filteredData[newIdx] then
+                widget.onClick(widget.filteredData[newIdx])
+            end
+        end
+    end)
 
     -- Refresh the display
     function widget:Refresh()
@@ -179,6 +254,9 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
         if self.scrollOffset > maxScroll then
             self.scrollOffset = maxScroll
         end
+
+        -- #24: enable keyboard only when there's content
+        frame:EnableKeyboard(#self.filteredData > 0)
 
         -- Update rows
         for i = 1, #self.rows do
@@ -230,6 +308,13 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
                     row.statusText:SetText(FB.COLORS.GREEN .. "Available|r")
                 else
                     row.statusText:SetText(FB.COLORS.RED .. "Locked|r")
+                end
+
+                -- #7: Show/hide selected highlight
+                if dataIdx == self.selectedIndex then
+                    row.selected:Show()
+                else
+                    row.selected:Hide()
                 end
 
                 row:Show()

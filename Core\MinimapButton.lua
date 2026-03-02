@@ -95,6 +95,35 @@ function FB.MinimapButton:Create()
         if pinnedCount > 0 then
             GameTooltip:AddLine("|cFFFFD200" .. pinnedCount .. " items pinned|r")
         end
+
+        -- #17: Scan freshness line
+        local lastScan = FB.charDB and FB.charDB.lastMountScan
+        if lastScan and lastScan > 0 then
+            local elapsed = time() - lastScan
+            local scanLine
+            if elapsed < 60 then
+                scanLine = "Last scan: just now"
+            elseif elapsed < 3600 then
+                local mins = math.floor(elapsed / 60)
+                scanLine = "Last scan: " .. mins .. (mins == 1 and " minute ago" or " minutes ago")
+            elseif elapsed < 86400 then
+                local hours = math.floor(elapsed / 3600)
+                scanLine = "Last scan: " .. hours .. (hours == 1 and " hour ago" or " hours ago")
+            else
+                -- Format as "today at HH:MM" or "X days ago"
+                local days = math.floor(elapsed / 86400)
+                if days == 0 then
+                    local scanDate = date("*t", lastScan)
+                    scanLine = string.format("Last scan: today at %02d:%02d", scanDate.hour, scanDate.min)
+                else
+                    scanLine = "Last scan: " .. days .. (days == 1 and " day ago" or " days ago")
+                end
+            end
+            GameTooltip:AddLine("|cFFCCCCCC" .. scanLine .. "|r")
+        else
+            GameTooltip:AddLine("|cFFFFAA00No scan this session|r")
+        end
+
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("|cFFCCCCCCLeft-Click:|r Open FarmBuddy")
         GameTooltip:AddLine("|cFFCCCCCCRight-Click:|r Toggle Tracker")
