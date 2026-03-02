@@ -2,43 +2,42 @@ local addonName, FB = ...
 
 FB.TestHarness = {}
 
-local passed = 0
-local failed = 0
-local errors = {}
+-- ARCH-3: Test state lives on the module table, reset at the start of each Run().
+-- Assert helpers read/write FB.TestHarness._passed/_failed/_errors so state is
+-- never stale across multiple Run() calls (the old upvalue approach kept the last
+-- run's counts when Run() was called a second time before Reset() was called).
+FB.TestHarness._passed = 0
+FB.TestHarness._failed = 0
+FB.TestHarness._errors = {}
 
 local function Assert(condition, testName, detail)
     if condition then
-        passed = passed + 1
+        FB.TestHarness._passed = FB.TestHarness._passed + 1
     else
-        failed = failed + 1
-        errors[#errors + 1] = testName .. (detail and (": " .. detail) or "")
+        FB.TestHarness._failed = FB.TestHarness._failed + 1
+        local e = FB.TestHarness._errors
+        e[#e + 1] = testName .. (detail and (": " .. detail) or "")
     end
 end
 
 local function AssertEqual(expected, actual, testName)
     if expected == actual then
-        passed = passed + 1
+        FB.TestHarness._passed = FB.TestHarness._passed + 1
     else
-        failed = failed + 1
-        errors[#errors + 1] = testName .. " (expected " .. tostring(expected) .. ", got " .. tostring(actual) .. ")"
+        FB.TestHarness._failed = FB.TestHarness._failed + 1
+        local e = FB.TestHarness._errors
+        e[#e + 1] = testName .. " (expected " .. tostring(expected) .. ", got " .. tostring(actual) .. ")"
     end
 end
 
 local function AssertRange(value, min, max, testName)
     if value >= min and value <= max then
-        passed = passed + 1
+        FB.TestHarness._passed = FB.TestHarness._passed + 1
     else
-        failed = failed + 1
-        errors[#errors + 1] = testName .. " (" .. tostring(value) .. " not in [" .. min .. ", " .. max .. "])"
+        FB.TestHarness._failed = FB.TestHarness._failed + 1
+        local e = FB.TestHarness._errors
+        e[#e + 1] = testName .. " (" .. tostring(value) .. " not in [" .. min .. ", " .. max .. "])"
     end
-end
-
--- Reset test state.
--- Called automatically at the start of each Run(). Not intended for external use.
-local function Reset()
-    passed = 0
-    failed = 0
-    errors = {}
 end
 
 -- =====================
@@ -801,7 +800,15 @@ end
 -- =====================
 
 function FB.TestHarness:Run()
-    Reset()
+    -- ARCH-3: Reset run-context state at the start of each Run()
+    FB.TestHarness._passed = 0
+    FB.TestHarness._failed = 0
+    FB.TestHarness._errors = {}
+
+    -- Convenience locals (read-only aliases used below for clarity)
+    local function passed() return FB.TestHarness._passed end
+    local function failed() return FB.TestHarness._failed end
+    local function errors() return FB.TestHarness._errors end
 
     print(FB.ADDON_COLOR .. "FarmBuddy Test Harness|r")
     print("---")
@@ -844,27 +851,28 @@ function FB.TestHarness:Run()
     }
 
     for _, suite in ipairs(suites) do
-        local beforeFailed = failed
+        local beforeFailed = failed()
         local ok, err = pcall(suite.func)
         if not ok then
-            failed = failed + 1
-            errors[#errors + 1] = suite.name .. " CRASHED: " .. tostring(err)
+            FB.TestHarness._failed = FB.TestHarness._failed + 1
+            local e = FB.TestHarness._errors
+            e[#e + 1] = suite.name .. " CRASHED: " .. tostring(err)
         end
-        local suiteFailed = failed - beforeFailed
+        local suiteFailed = failed() - beforeFailed
         local statusIcon = (suiteFailed == 0) and (FB.COLORS.GREEN .. "PASS|r") or (FB.COLORS.RED .. "FAIL|r")
         print("  " .. statusIcon .. " " .. suite.name)
     end
 
     print("---")
-    local totalColor = (failed == 0) and FB.COLORS.GREEN or FB.COLORS.RED
-    print(totalColor .. string.format("Results: %d passed, %d failed|r", passed, failed))
+    local totalColor = (failed() == 0) and FB.COLORS.GREEN or FB.COLORS.RED
+    print(totalColor .. string.format("Results: %d passed, %d failed|r", passed(), failed()))
 
-    if #errors > 0 then
+    if #errors() > 0 then
         print(FB.COLORS.RED .. "Failures:|r")
-        for _, err in ipairs(errors) do
+        for _, err in ipairs(errors()) do
             print("  - " .. err)
         end
     end
 
-    return failed == 0
+    return failed() == 0
 end

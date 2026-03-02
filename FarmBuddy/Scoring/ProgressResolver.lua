@@ -346,8 +346,10 @@ function FB.ProgressResolver:GetRepPointsRemaining(factionID, targetStanding, ta
             end
 
             -- Sum remaining tiers
+            -- LOGIC-2: Start from currentReaction + 1 (not +2) so the immediate
+            -- next tier is included and rep remaining is not undercounted.
             local remaining = math.max(0, tierMax - currentInTier)
-            for standing = currentReaction + 2, targetStanding do
+            for standing = currentReaction + 1, targetStanding do
                 remaining = remaining + (STANDING_TIER_SIZES[standing] or 3000)
             end
             return remaining, nil

@@ -79,10 +79,14 @@ FB:RegisterEvent("ADDON_LOADED", FB, function(self, event, loadedAddon)
     FB:UnregisterEvent("ADDON_LOADED", FB)
 end)
 
--- Player entering world (good time to refresh data)
+-- Player entering world (fires on login, reload, and zone changes)
 FB:RegisterEvent("PLAYER_ENTERING_WORLD", FB, function(self, event, isLogin, isReload)
-    -- Update player info
+    -- Always update player info (cheap, safe on every zone change)
     FB:CachePlayerInfo()
+
+    -- BUG-8: Only run expensive cache invalidation and housekeeping on actual
+    -- login/reload, not on every zone change (PLAYER_ENTERING_WORLD fires for both).
+    if not isLogin and not isReload then return end
 
     -- Update character data (delay slightly to let instance info load)
     C_Timer.After(2, function()
@@ -149,6 +153,11 @@ FB:RegisterEvent("NEW_MOUNT_ADDED", FB, function(self, event, mountID)
     -- Invalidate scan cache so next view shows updated results
     if FB.db then
         FB.db.cachedMountScores = nil
+    end
+
+    -- ARCH-5: Invalidate WeeklyTracker cache so newly collected mount disappears
+    if FB.WeeklyTracker and FB.WeeklyTracker.InvalidateCache then
+        FB.WeeklyTracker:InvalidateCache()
     end
 
     -- Record in session history if tracking

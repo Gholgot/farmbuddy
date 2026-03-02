@@ -88,6 +88,19 @@ function FB.TimeGateResolver:GetAttemptsRemaining(mountMeta)
         )
         return locked and 0 or 1
 
+    elseif timeGate == "biweekly" then
+        -- FEAT-1: Biweekly lockouts — standard WoW does not have true biweekly instances,
+        -- but custom MountDB entries may use this gate. Fall through to the weekly instance
+        -- lockout check if a lockoutInstanceName is provided; otherwise treat as available.
+        if mountMeta.lockoutInstanceName then
+            local locked = self:IsInstanceLocked(
+                mountMeta.lockoutInstanceName,
+                mountMeta.difficultyID
+            )
+            return locked and 0 or 1
+        end
+        return 1  -- No instance name to check — assume available
+
     elseif timeGate == "daily" then
         if mountMeta.dailyQuestID then
             local done = self:IsDailyDone(mountMeta.dailyQuestID)
@@ -172,8 +185,18 @@ function FB.TimeGateResolver:IsHolidayEventActive(mountMeta)
     local setOk = pcall(C_Calendar.SetAbsMonth, currentDate.month, currentDate.year)
     if not setOk then return true end
 
+    -- BUG-4: Compute the actual number of days in the current month (no longer hardcoded 31)
+    local function GetDaysInMonth(month, year)
+        local daysPerMonth = {31,28,31,30,31,30,31,31,30,31,30,31}
+        local days = daysPerMonth[month] or 31
+        if month == 2 and (year % 4 == 0 and (year % 100 ~= 0 or year % 400 == 0)) then
+            days = 29
+        end
+        return days
+    end
+    local daysInMonth = GetDaysInMonth(currentDate.month, currentDate.year)
+
     -- Scan a 11-day window: -3 to +7 days (catch upcoming events too)
-    local daysInMonth = 31  -- Safe upper bound
     for dayOffset = -3, 7 do
         local checkDay = currentDate.monthDay + dayOffset
         if checkDay >= 1 and checkDay <= daysInMonth then

@@ -5,6 +5,10 @@ FB.WeeklyTracker = {}
 -- Cache of spellID -> mountID lookups (expensive to compute)
 local mountIDCache = {}
 
+-- ARCH-5: Module-level cache for GetWeeklyMounts results.
+-- Rebuilt lazily on first call; invalidated by InvalidateCache() or NEW_MOUNT_ADDED.
+local weeklyMountsCache = nil
+
 -- Extract a useful location label from Blizzard's sourceText
 -- Handles many formats: "Drop: Instance", "Dropped by Boss", plain text, etc.
 local function ParseSourceLabel(sourceText)
@@ -75,10 +79,22 @@ local function PopulateLockouts(entry)
     end
 end
 
+-- ARCH-5: Invalidate the weekly mounts cache. Call when mount collection changes
+-- (NEW_MOUNT_ADDED event) or when the user explicitly refreshes the Weekly tab.
+function FB.WeeklyTracker:InvalidateCache()
+    weeklyMountsCache = nil
+end
+
 -- Get a structured list of weekly-farmable mounts and their lockout status per character
 -- Combines curated MountDB entries with ALL uncollected raid/dungeon mounts from Blizzard API
 -- Returns: { { mountName, instanceName, difficultyID, characters = { [charKey] = locked } }, ... }
+-- ARCH-5: Results are cached in weeklyMountsCache. Cache is only rebuilt when nil.
 function FB.WeeklyTracker:GetWeeklyMounts()
+    -- Return cached results if available (avoids iterating all mount IDs on every tab open)
+    if weeklyMountsCache then
+        return weeklyMountsCache
+    end
+
     local weeklyMounts = {}
     local seenSpells = {}
 
@@ -165,6 +181,8 @@ function FB.WeeklyTracker:GetWeeklyMounts()
         return (a.name or "") < (b.name or "")
     end)
 
+    -- ARCH-5: Store in module-level cache for subsequent calls
+    weeklyMountsCache = weeklyMounts
     return weeklyMounts
 end
 

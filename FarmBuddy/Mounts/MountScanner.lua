@@ -217,7 +217,7 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                         local expected = math.ceil(1 / r.dropChance)
                         if r.attemptCount > expected then
                             local ratio = r.attemptCount / expected
-                            local pUnlucky = math.pow(1 - r.dropChance, r.attemptCount) * 100
+                            local pUnlucky = (1 - r.dropChance) ^ r.attemptCount * 100
                             r.luckPercentile = pUnlucky
                             r.scoreExplanation = r.scoreExplanation .. string.format(
                                 " | %d/%d attempts (unluckiest %.0f%%)",

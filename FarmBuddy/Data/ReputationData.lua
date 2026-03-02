@@ -142,4 +142,6 @@ FB.ReputationData = {
     [2594] = { name = "The Assembly of the Deeps", dailyRep = 400, weeklyRep = 2500, method = "renown", expansion = "TWW" },
     [2600] = { name = "Hallowfall Arathi",      dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
     [2601] = { name = "The Severed Threads",    dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
+    -- FEAT-8: TWW Season 2 — The Cartels of Undermine gate mount purchases in patch 11.1
+    [2605] = { name = "The Cartels of Undermine", dailyRep = 400, weeklyRep = 2500, method = "renown", expansion = "TWW" },
 }

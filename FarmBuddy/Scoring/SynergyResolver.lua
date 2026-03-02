@@ -15,6 +15,8 @@ FB.SynergyResolver = {}
 local instanceToAchievements = nil
 
 function FB.SynergyResolver:BuildSynergyMap()
+    -- PERF-4: Early return if already built — avoids redundant iteration during scan
+    if instanceToAchievements then return end
     instanceToAchievements = {}
 
     if not FB.AchievementDB or not FB.AchievementDB.overrides then return end
@@ -29,6 +31,13 @@ function FB.SynergyResolver:BuildSynergyMap()
             instanceToAchievements[key][#instanceToAchievements[key] + 1] = achID
         end
     end
+end
+
+-- PERF-4: Public method that ensures the synergy map is built before use.
+-- Callers (e.g. MountScanner) can call this before beginning a batch scan so the
+-- map is ready for every FindSynergies call without per-call lazy-build overhead.
+function FB.SynergyResolver:EnsureBuilt()
+    self:BuildSynergyMap()
 end
 
 -- Find synergies for a mount result

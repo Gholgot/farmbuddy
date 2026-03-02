@@ -113,7 +113,7 @@ function FB.Scoring:Score(input, weights)
         -- With warband: each alt adds 14 more attempts per event
         local attemptsPerEvent = 14 * warbandMultiplier
         if dropChance and dropChance > 0 and dropChance < 1 then
-            local pPerEvent = 1 - math.pow(1 - dropChance, attemptsPerEvent)
+            local pPerEvent = 1 - (1 - dropChance) ^ attemptsPerEvent
             if pPerEvent > 0 then
                 local eventsNeeded = math.ceil(1 / pPerEvent)
                 calendarDays = eventsNeeded * 365
@@ -219,7 +219,9 @@ function FB.Scoring:Score(input, weights)
             local availabilityDiscounts = {
                 none = 0.25,    -- Unlimited farm: full discount
                 daily = 0.15,   -- Daily gated: moderate discount
+                biweekly = 0.12, -- Biweekly gated: between daily and weekly
                 weekly = 0.10,  -- Weekly gated: smaller discount
+                monthly = 0.09, -- Monthly rotation: small discount
                 yearly = 0.08,  -- Yearly event: minimal discount
             }
             local discount = availabilityDiscounts[input.timeGate or "none"] or 0.15
@@ -333,6 +335,10 @@ function FB.Scoring:BuildExplanation(input, data)
         parts[#parts + 1] = "daily lockout"
     elseif input.timeGate == "yearly" then
         parts[#parts + 1] = "yearly event only"
+    elseif input.timeGate == "monthly" then
+        parts[#parts + 1] = "monthly rotation"
+    elseif input.timeGate == "biweekly" then
+        parts[#parts + 1] = "biweekly lockout"
     end
 
     -- FIX-3: Drop chance source transparency

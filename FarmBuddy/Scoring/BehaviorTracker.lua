@@ -83,7 +83,9 @@ function FB.BehaviorTracker:GetWeightAdjustments()
     -- FIX-10: Temporal decay — recent sessions count more than old ones
     -- Apply exponential decay to click/skip counts based on session history
     local sessionAge = (log.totalSessions or 0) - MIN_SESSIONS_FOR_LEARNING
-    local decayFactor = sessionAge > 20 and 0.7 or 1.0  -- Reduce influence of old data
+    -- FEAT-6: Gradual continuous decay instead of binary step.
+    -- Smoothly reduces influence from 1.0 to 0.5 over 100 sessions past the threshold.
+    local decayFactor = math.max(0.5, 1.0 - (sessionAge / 100) * 0.5)
 
     -- If player consistently skips group content, increase groupRequirement weight.
     -- Group detection is by source type ("pvp", "raid_drop"), not by group size labels.

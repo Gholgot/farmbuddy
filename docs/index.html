@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FarmBuddy — WoW Mount Farming Addon</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --gold: #FFD200;
+      --gold-dim: #c9a800;
+      --bg: #0f0f1a;
+      --bg-card: #1a1a2e;
+      --bg-card-border: #2a2a4a;
+      --text: #d4cfc8;
+      --text-muted: #8a8599;
+      --green: #4caf6e;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    a {
+      color: var(--gold);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(180deg, #0a0a14 0%, var(--bg-card) 100%);
+      border-bottom: 1px solid var(--bg-card-border);
+      padding: 3rem 1.5rem 2.5rem;
+      text-align: center;
+    }
+
+    .addon-icon {
+      display: inline-block;
+      width: 64px;
+      height: 64px;
+      background: var(--bg-card-border);
+      border: 2px solid var(--gold-dim);
+      border-radius: 12px;
+      margin-bottom: 1.25rem;
+      line-height: 64px;
+      font-size: 2rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+    }
+
+    .tagline {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .btn-download {
+      display: inline-block;
+      background: var(--gold);
+      color: #0f0f1a;
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 0.85rem 2.25rem;
+      border-radius: 6px;
+      letter-spacing: 0.03em;
+      transition: background 0.15s, transform 0.1s;
+      text-decoration: none;
+    }
+
+    .btn-download:hover {
+      background: #ffe44d;
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+
+    .btn-download:active {
+      transform: translateY(0);
+    }
+
+    .btn-download-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 400;
+      opacity: 0.65;
+      margin-top: 0.15rem;
+      letter-spacing: 0.01em;
+    }
+
+    .github-link {
+      display: inline-block;
+      margin-left: 1rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      vertical-align: middle;
+    }
+
+    .github-link:hover {
+      color: var(--text);
+    }
+
+    /* ── Main content ── */
+    main {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+
+    /* ── Screenshot placeholder (commented out for future use) ── */
+    /*
+    .screenshot-area {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 8px;
+      height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 3rem;
+    }
+    */
+
+    /* ── Section cards ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 8px;
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--bg-card-border);
+    }
+
+    /* ── Installation steps ── */
+    ol.steps {
+      list-style: none;
+      counter-reset: step;
+    }
+
+    ol.steps li {
+      counter-increment: step;
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      padding: 0.45rem 0;
+      color: var(--text);
+    }
+
+    ol.steps li::before {
+      content: counter(step);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.5rem;
+      height: 1.5rem;
+      background: var(--gold-dim);
+      color: #0f0f1a;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    code {
+      background: rgba(255, 210, 0, 0.08);
+      border: 1px solid rgba(255, 210, 0, 0.2);
+      border-radius: 4px;
+      padding: 0.1em 0.4em;
+      font-size: 0.88em;
+      color: #e8d98a;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    /* ── Features grid ── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      padding: 0.65rem 0.75rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--bg-card-border);
+      border-radius: 6px;
+    }
+
+    .feature-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--gold);
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 0.5rem;
+    }
+
+    .feature-text {
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--bg-card-border);
+      text-align: center;
+      padding: 1.75rem 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    footer a {
+      color: var(--text-muted);
+    }
+
+    footer a:hover {
+      color: var(--gold);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      h1 {
+        font-size: 1.9rem;
+      }
+
+      .btn-download {
+        font-size: 1rem;
+        padding: 0.75rem 1.75rem;
+      }
+
+      .github-link {
+        display: block;
+        margin: 0.75rem auto 0;
+      }
+
+      .card {
+        padding: 1.25rem 1.25rem;
+      }
+
+      .features {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="addon-icon">&#x1F40E;</div>
+    <h1>FarmBuddy</h1>
+    <p class="tagline">Smart mount farming recommendations, scoring, and session planning for World of Warcraft.</p>
+
+    <a class="btn-download"
+       href="https://github.com/Gholgot/farmbuddy/releases/latest/download/FarmBuddy.zip">
+      Download Latest
+      <span class="btn-download-label">FarmBuddy.zip &mdash; extract to Interface/AddOns/</span>
+    </a>
+
+    <a class="github-link"
+       href="https://github.com/Gholgot/farmbuddy"
+       target="_blank"
+       rel="noopener">
+      View on GitHub &rarr;
+    </a>
+  </header>
+
+  <main>
+
+    <!-- Screenshot area — uncomment and add src when screenshots are ready -->
+    <!--
+    <div class="screenshot-area">
+      <img src="screenshot.png" alt="FarmBuddy screenshot" style="max-width:100%;border-radius:6px;" />
+    </div>
+    -->
+
+    <div class="card">
+      <h2>Installation</h2>
+      <ol class="steps">
+        <li>Click <strong>Download Latest</strong> above to get <code>FarmBuddy.zip</code>.</li>
+        <li>Extract the zip — you'll get a <code>FarmBuddy/</code> folder.</li>
+        <li>Move the <code>FarmBuddy/</code> folder into your WoW AddOns directory:<br>
+            <code>World of Warcraft/_retail_/Interface/AddOns/</code></li>
+        <li>Launch (or reload) World of Warcraft. Type <code>/farmbuddy</code> in chat to open.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>Features</h2>
+      <div class="features">
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <span class="feature-text">Mount farming recommendations ranked by score</span>
+        </div>
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <span class="feature-text">Scoring based on drop rate, time investment, and difficulty</span>
+        </div>
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <span class="feature-text">Weekly lockout tracker across all your characters</span>
+        </div>
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <span class="feature-text">Session planner to prioritize your farm list</span>
+        </div>
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <span class="feature-text">Progress tracking by expansion</span>
+        </div>
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <span class="feature-text">Mount search with filters and detailed stats</span>
+        </div>
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <span class="feature-text">Achievement-based mount tracking</span>
+        </div>
+        <div class="feature">
+          <div class="feature-dot"></div>
+          <span class="feature-text">WoWHead links for every mount</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <p>
+      FarmBuddy is a community addon, not affiliated with Blizzard Entertainment. &nbsp;&bull;&nbsp;
+      <a href="https://github.com/Gholgot/farmbuddy" target="_blank" rel="noopener">GitHub</a>
+    </p>
+  </footer>
+
+</body>
+</html>

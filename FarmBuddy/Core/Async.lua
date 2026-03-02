@@ -24,9 +24,10 @@ function FB.Async:RunBatched(items, workFunc, batchSize, onProgress, onComplete)
     local total = #items
     local current = 0
 
-    -- Timing function (milliseconds)
-    local getTime = debugprofile or GetTimePreciseSec or function() return 0 end
-    local isMs = (debugprofile ~= nil)  -- debugprofile returns ms, GetTimePreciseSec returns seconds
+    -- Timing function: GetTimePreciseSec is always available in retail WoW (returns seconds).
+    -- API-2: prefer it over debugprofile (which returns ms and may be nil in retail).
+    local getTime = GetTimePreciseSec or debugprofile or function() return 0 end
+    local isMs = (GetTimePreciseSec == nil and debugprofile ~= nil)  -- only ms when falling back to debugprofile
 
     local co = coroutine.create(function()
         local batchStart = getTime()

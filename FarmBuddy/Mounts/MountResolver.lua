@@ -690,7 +690,7 @@ function FB.Mounts.Resolver:IsUnobtainable(sourceType, sourceText, hideOnChar, n
             -- Past season gladiator mounts reference old expansion names
             local pastExpansionKeywords = {
                 "combatant", "season 1", "season 2", "season 3", "season 4",
-                "vicious", "sinful", "unchained", "cosmic",  -- SL
+                "sinful", "unchained", "cosmic",  -- SL (note: "vicious" removed — current Vicious mounts are still obtainable)
                 "corrupted", "notorious", "mindless",  -- BFA
                 "demonic", "fearless", "fierce", "dominant", "cruel",  -- Legion
                 "warmongering", "wild",  -- WoD
@@ -968,6 +968,15 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
         meta = generatedMeta
     end
 
+    -- BUG-7: Normalize numeric faction (0=Alliance, 1=Horde) to string to match
+    -- UnitFactionGroup() output used by WeeklyTracker and WeeklyPlanner.
+    local factionStr = nil
+    if isFactionSpecific then
+        if faction == 0 then factionStr = "Alliance"
+        elseif faction == 1 then factionStr = "Horde"
+        end
+    end
+
     -- Build scoring input
     local input = {
         id = spellID,
@@ -979,7 +988,7 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
         isCollected = false,
         blizzSourceType = sourceType,  -- Keep numeric for reference
         isFactionSpecific = isFactionSpecific,
-        faction = (isFactionSpecific and faction) or (generatedMeta and generatedMeta.faction) or nil,
+        faction = factionStr or (generatedMeta and generatedMeta.faction) or nil,
     }
 
     if meta then
@@ -1189,7 +1198,8 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
         if input.goldCost and input.goldCost > 0 then
             local goldProgress = FB.ProgressResolver:GetGoldProgress(input.goldCost)
             if goldProgress > 0 then
-                local hoursNeeded = (input.goldCost * goldProgress) / 10000
+                local GOLD_PER_HOUR = 3000  -- Conservative estimate for raw gold farming
+                local hoursNeeded = (input.goldCost * goldProgress) / GOLD_PER_HOUR
                 -- Only override timePerAttempt if gold is the main blocker
                 if not input.factionID and not input.currencyID then
                     input.timePerAttempt = math.max(5, math.min(600, hoursNeeded * 60))
@@ -1347,7 +1357,7 @@ local EXPANSION_INDEX = {
     WOD = 5, LEGION = 6, BFA = 7, SL = 8, DF = 9, TWW = 10,
     MIDNIGHT = 11,
 }
-local CURRENT_EXPANSION_INDEX = 11  -- Midnight
+local CURRENT_EXPANSION_INDEX = 10  -- TWW (The War Within); update to 11 when Midnight launches
 
 -- Get a time multiplier based on content age (old content is trivially fast to clear)
 function FB.Mounts.Resolver:GetLegacyMultiplier(expansion)

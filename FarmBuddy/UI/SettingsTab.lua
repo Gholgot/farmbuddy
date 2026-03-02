@@ -10,6 +10,22 @@ local previewStatusLine = nil
 local rescanBtn = nil
 local isScanning = false
 
+-- ARCH-4: Debounce preview updates so rapid slider drags don't re-score all cached
+-- mounts on every tick. Only the final resting position triggers a rescore.
+local previewDirty = false
+local previewTimer = nil
+
+local function SchedulePreviewUpdate(self)
+    previewDirty = true
+    if previewTimer then previewTimer:Cancel() end
+    previewTimer = C_Timer.NewTimer(0.2, function()
+        if previewDirty then
+            previewDirty = false
+            FB.UI.SettingsTab:UpdatePreview()
+        end
+    end)
+end
+
 function FB.UI.SettingsTab:Init(parentPanel)
     panel = parentPanel
 
@@ -121,7 +137,8 @@ function FB.UI.SettingsTab:Init(parentPanel)
             if FB.db and FB.db.settings then
                 FB.db.settings.hoursPerDay = value
             end
-            self:UpdatePreview()
+            -- ARCH-4: debounce preview update so slider drags don't re-score every tick
+            SchedulePreviewUpdate()
         end)
     sliders["hoursPerDay"] = hoursSlider
     yOffset = yOffset - 55
@@ -232,8 +249,8 @@ function FB.UI.SettingsTab:CreateWeightSlider(parent, key, label, desc, yOffset)
         if FB.db and FB.db.settings and FB.db.settings.weights then
             FB.db.settings.weights[key] = value
         end
-        -- Update preview when weight changes
-        self:UpdatePreview()
+        -- ARCH-4: debounce preview update so slider drags don't re-score every tick
+        SchedulePreviewUpdate()
     end)
 end
 

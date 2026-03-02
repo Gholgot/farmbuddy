@@ -142,13 +142,15 @@ function FB.Storage:MigrateAccount(db)
             end
         end
     end
-    -- Migrate old weight key: dropChance -> effort
+    -- Migrate old weight key: dropChance -> effort (only runs when old key is present)
     if db.settings and db.settings.weights then
         local w = db.settings.weights
-        if w.dropChance and not w.effort then
-            w.effort = w.dropChance
+        if w and w.dropChance ~= nil then
+            if not w.effort then
+                w.effort = w.dropChance
+            end
+            w.dropChance = nil
         end
-        w.dropChance = nil
     end
 end
 

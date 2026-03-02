@@ -89,6 +89,11 @@ FB.InstanceData.instances = {
         bossCount = 6,
         soloMinutes = 10,
     },
+    ["Terrace of Endless Spring"] = {
+        expansion = "MOP",
+        bossCount = 4,
+        soloMinutes = 8,
+    },
     ["Heart of Fear"] = {
         expansion = "MOP",
         bossCount = 6,

@@ -463,7 +463,13 @@ function FB.UI.MountRecommendTab:SaveCurrentPreset()
 
     -- Reuse existing dialog frame if it was already created
     if _G["FarmBuddyPresetDialog"] then
-        _G["FarmBuddyPresetDialog"]:Show()
+        -- BUG-6: Clear stale name from EditBox before re-showing the dialog
+        local existingDialog = _G["FarmBuddyPresetDialog"]
+        if existingDialog.inputBox then
+            existingDialog.inputBox:SetText("")
+            existingDialog.inputBox:SetFocus()
+        end
+        existingDialog:Show()
         return
     end
 
@@ -501,6 +507,8 @@ function FB.UI.MountRecommendTab:SaveCurrentPreset()
     input:SetTextInsets(4, 4, 0, 0)
     input:SetMaxLetters(30)
     input:SetText("My Preset")
+    -- BUG-6: Store reference on dialog so re-show path can clear it
+    dialog.inputBox = input
 
     local saveBtn = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
     saveBtn:SetSize(80, 22)
@@ -557,7 +565,12 @@ function FB.UI.MountRecommendTab:OnShow()
         self:StartScan()
     else
         filterBar.frame:Show()
-        self.statusLabel:SetText("No scan results. Click 'Scan Mounts' to begin.")
+        -- FEAT-2: Distinguish between "never scanned" and "cache expired after auto-scan"
+        if autoScanned and not scanHandle then
+            self.statusLabel:SetText("Scan cache expired — click 'Scan Mounts' to refresh.")
+        else
+            self.statusLabel:SetText("No scan results. Click 'Scan Mounts' to begin.")
+        end
     end
 end
 
@@ -693,7 +706,7 @@ function FB.UI.MountRecommendTab:SelectMount(item)
         local expected = math.ceil(1 / item.dropChance)
         extraLines[#extraLines + 1] = ""
         if item.attemptCount > expected then
-            local pUnlucky = math.pow(1 - item.dropChance, item.attemptCount) * 100
+            local pUnlucky = (1 - item.dropChance) ^ item.attemptCount * 100
             extraLines[#extraLines + 1] = string.format(
                 "%sAttempts:|r %d / %d expected (unluckiest %.0f%% of players)",
                 FB.COLORS.ORANGE, item.attemptCount, expected, pUnlucky

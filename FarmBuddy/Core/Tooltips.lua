@@ -4,6 +4,30 @@ FB.Tooltips = {}
 
 local hooked = false
 
+-- BUG-1: Cache spellID -> mountID to avoid iterating 1800+ mounts on every tooltip hover
+local mountIDBySpellID = {}
+local mountIDCacheBuilt = false
+
+local function BuildMountIDCache()
+    if mountIDCacheBuilt then return end
+    mountIDCacheBuilt = true
+    local mountIDs = C_MountJournal.GetMountIDs()
+    for _, id in ipairs(mountIDs) do
+        local _, sid = C_MountJournal.GetMountInfoByID(id)
+        if sid then
+            mountIDBySpellID[sid] = id
+        end
+    end
+end
+
+-- Invalidate cache when the player learns a new mount
+local cacheInvalidFrame = CreateFrame("Frame")
+cacheInvalidFrame:RegisterEvent("NEW_MOUNT_ADDED")
+cacheInvalidFrame:SetScript("OnEvent", function()
+    mountIDCacheBuilt = false
+    wipe(mountIDBySpellID)
+end)
+
 -- Hook into the Mount Journal tooltip to show FarmBuddy scoring data
 function FB.Tooltips:Init()
     if hooked then return end
@@ -11,7 +35,8 @@ function FB.Tooltips:Init()
 
     -- Hook GameTooltip for mount display info
     -- When players hover over mounts in the Mount Journal, inject score data
-    if GameTooltip and GameTooltip.HookScript then
+    -- ARCH-1: Guard — SetMountBySpellID does not exist in WoW 10.0+
+    if GameTooltip and GameTooltip.SetMountBySpellID then
         hooksecurefunc(GameTooltip, "SetMountBySpellID", function(tooltip, spellID)
             self:OnMountTooltip(tooltip, spellID)
         end)
@@ -90,16 +115,10 @@ function FB.Tooltips:OnMountTooltip(tooltip, spellID)
     tooltip:Show()
 end
 
--- Find mountID from spellID
+-- Find mountID from spellID (BUG-1: uses module-level cache, built once on first call)
 function FB.Tooltips:FindMountIDBySpellID(spellID)
-    local mountIDs = C_MountJournal.GetMountIDs()
-    for _, id in ipairs(mountIDs) do
-        local _, sid = C_MountJournal.GetMountInfoByID(id)
-        if sid == spellID then
-            return id
-        end
-    end
-    return nil
+    BuildMountIDCache()
+    return mountIDBySpellID[spellID]
 end
 
 -- Get score from cached scan results

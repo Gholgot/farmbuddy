@@ -30,27 +30,26 @@ local filterAttemptedThisWeek = false
 local filterExpansion = nil
 local searchText = ""
 
--- Calculate the most recent weekly reset timestamp
--- US resets Tuesday 15:00 UTC, EU resets Wednesday 07:00 UTC
--- Use Tuesday 15:00 UTC as a safe universal approximation
+-- Calculate the most recent weekly reset timestamp.
+-- BUG-9: Avoid date("!*t", ...) which may behave unexpectedly in WoW's sandboxed Lua.
+-- Instead, compute purely from epoch arithmetic.
+-- US resets Tuesday 15:00 UTC.  A known Tuesday 15:00 UTC anchor:
+--   2024-01-02 15:00 UTC = epoch 1704207600.
+-- Days since that anchor mod 7 gives offset to the most recent Tuesday reset.
+local KNOWN_RESET_EPOCH = 1704207600  -- 2024-01-02 15:00 UTC (Tuesday)
+local WEEK_SECONDS      = 7 * 86400
+
 local function GetWeeklyResetTimestamp()
     local now = GetServerTime and GetServerTime() or time()
-    local dateInfo = date("!*t", now)
-    -- Lua os.date wday: 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat
-    local daysSinceTuesday = (dateInfo.wday - 3) % 7
-    if daysSinceTuesday == 0 then
-        -- It IS Tuesday: check if we're past reset hour (15:00 UTC)
-        local todayResetSec = now - (dateInfo.hour * 3600 + dateInfo.min * 60 + dateInfo.sec) + (15 * 3600)
-        if now >= todayResetSec then
-            return todayResetSec
-        else
-            daysSinceTuesday = 7  -- Before reset hour, use last Tuesday
-        end
+    -- How many whole weeks have elapsed since the known anchor?
+    local elapsed = now - KNOWN_RESET_EPOCH
+    local weeksPast = math.floor(elapsed / WEEK_SECONDS)
+    local resetTS = KNOWN_RESET_EPOCH + (weeksPast * WEEK_SECONDS)
+    -- If we're exactly on the boundary or before, step back one week
+    if resetTS > now then
+        resetTS = resetTS - WEEK_SECONDS
     end
-    -- Calculate last Tuesday 15:00 UTC
-    local lastTuesday = now - (daysSinceTuesday * 86400)
-    local ltd = date("!*t", lastTuesday)
-    return lastTuesday - (ltd.hour * 3600 + ltd.min * 60 + ltd.sec) + (15 * 3600)
+    return resetTS
 end
 
 -- Check if a mount has been attempted since the most recent weekly reset

@@ -1,0 +1,35 @@
+name: Package Addon
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package addon
+        run: zip -r FarmBuddy.zip FarmBuddy/
+
+      - name: Update latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Build
+          body: |
+            Latest build of FarmBuddy.
+
+            **Installation:**
+            1. Download `FarmBuddy.zip`
+            2. Extract into your WoW `Interface/AddOns/` folder
+            3. Reload WoW
+          files: FarmBuddy.zip
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -131,7 +131,7 @@ function FB.Export:ShowCopyFrame(text)
 
         local editBox = CreateFrame("EditBox", "FarmBuddyExportEditBox", scrollFrame)
         editBox:SetMultiLine(true)
-        editBox:SetAutoFocus(true)
+        editBox:SetAutoFocus(false)  -- FEAT-7: Do not steal focus on creation; SetFocus() called explicitly after Show().
         editBox:SetFontObject("ChatFontNormal")
         editBox:SetWidth(440)
         editBox:SetScript("OnEscapePressed", function() frame:Hide() end)
