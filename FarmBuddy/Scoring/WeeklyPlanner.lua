@@ -160,7 +160,16 @@ function FB.WeeklyPlanner:FormatPlan(plan)
     lines[#lines + 1] = ""
 
     -- Per-character assignments
-    for charKey, mounts in pairs(plan.assignments) do
+    -- LOW-11: Sort character keys so output is deterministic across sessions.
+    -- pairs() iteration order is non-deterministic in Lua; sort alphabetically.
+    local sortedCharKeys = {}
+    for charKey in pairs(plan.assignments) do
+        sortedCharKeys[#sortedCharKeys + 1] = charKey
+    end
+    table.sort(sortedCharKeys)
+
+    for _, charKey in ipairs(sortedCharKeys) do
+        local mounts = plan.assignments[charKey]
         local shortName = charKey:match("^(.-)%s*-") or charKey
         local charInfo = FB.db and FB.db.characters and FB.db.characters[charKey]
         local classColor = charInfo and FB.CLASS_COLORS[charInfo.class] or "FFFFFF"

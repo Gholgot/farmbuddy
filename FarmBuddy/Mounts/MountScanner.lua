@@ -370,6 +370,8 @@ function FB.Mounts.Scanner:FilterResults(results, filters)
         if filters.showProfession == false and r.sourceType == "profession" then pass = false end
         if filters.showAchievement == false and r.sourceType == "achievement" then pass = false end
         if filters.showVendor == false and r.sourceType == "vendor" then pass = false end
+        -- MED-6: TCG filter (obtainable via Auction House)
+        if filters.showTCG == false and r.sourceType == "tcg" then pass = false end
         if filters.showRAF == false and r.sourceType == "recruit_a_friend" then pass = false end
 
         -- Immediately available only

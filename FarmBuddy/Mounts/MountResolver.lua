@@ -876,7 +876,12 @@ function FB.Mounts.Resolver:EnrichFromSourceText(input, sourceText, skipTypes)
 
         if repData then
             local repDays
-            if repData.method == "renown" and renownRemaining then
+            if repData.method == "one-time" then
+                -- MED-5: Lorewalkers and similar one-time quest chains cannot be
+                -- estimated by dividing remaining rep by dailyRep=0. Treat as a
+                -- short one-time effort equivalent to ~1 day of questing.
+                repDays = 1
+            elseif repData.method == "renown" and renownRemaining then
                 local weeks = math.ceil(renownRemaining / math.max(1, repData.weeklyRep))
                 repDays = weeks * 7
             elseif repData.method == "tabard" and repRemaining then
@@ -895,12 +900,9 @@ function FB.Mounts.Resolver:EnrichFromSourceText(input, sourceText, skipTypes)
         else
             -- Fallback: scale by expansion age (no curated daily rate data)
             -- FIX-2: repDataCurated = false so explanation shows "(est.)" suffix
-            local EXPANSION_INDEX = {
-                CLASSIC = 0, TBC = 1, WOTLK = 2, CATA = 3, MOP = 4,
-                WOD = 5, LEGION = 6, BFA = 7, SL = 8, DF = 9, TWW = 10, MIDNIGHT = 11,
-            }
+            -- LOW-4: Uses the shared EXPANSION_INDEX alias (from FB.EXPANSION_INDEX in Constants.lua)
             local idx = input.expansion and EXPANSION_INDEX[input.expansion]
-            local age = idx and (11 - idx) or nil
+            local age = idx and (CURRENT_EXPANSION_INDEX - idx) or nil
             local fallbackDays
             if age and age >= 6 then
                 fallbackDays = 10   -- Ancient rep: tabard farmable, fast
@@ -912,7 +914,9 @@ function FB.Mounts.Resolver:EnrichFromSourceText(input, sourceText, skipTypes)
                 fallbackDays = 30   -- Recent rep: mixed sources
                 input.expectedAttempts = 30
             else
-                fallbackDays = 40   -- Current rep: weekly-capped renown
+                -- Current or brand-new expansion (age == 0): weekly-capped renown.
+                -- CRIT-4: age=0 (MIDNIGHT) is handled here via the catch-all else.
+                fallbackDays = 40
                 input.expectedAttempts = 40
             end
             -- FIX-2: Store the fallback estimate so BuildExplanation can show it
@@ -1407,13 +1411,10 @@ function FB.Mounts.Resolver:GuessSourceType(sourceText)
     return "unknown"
 end
 
--- Expansion index for age-based calculations (higher = newer)
-local EXPANSION_INDEX = {
-    CLASSIC = 0, TBC = 1, WOTLK = 2, CATA = 3, MOP = 4,
-    WOD = 5, LEGION = 6, BFA = 7, SL = 8, DF = 9, TWW = 10,
-    MIDNIGHT = 11,
-}
-local CURRENT_EXPANSION_INDEX = 11  -- Midnight
+-- LOW-4: Expansion index is now the single authoritative copy in Constants.lua
+-- (FB.EXPANSION_INDEX / FB.CURRENT_EXPANSION_INDEX). Local aliases for brevity.
+local EXPANSION_INDEX         = FB.EXPANSION_INDEX
+local CURRENT_EXPANSION_INDEX = FB.CURRENT_EXPANSION_INDEX
 
 -- Get a time multiplier based on content age (old content is trivially fast to clear)
 function FB.Mounts.Resolver:GetLegacyMultiplier(expansion)

@@ -185,6 +185,15 @@ FB.DROP_SOURCE_TYPES = {
     world_boss = true, event = true,
 }
 
+-- LOW-4: Single authoritative expansion index table (higher index = newer expansion).
+-- MountResolver.lua previously had two copies of this; all files should use FB.EXPANSION_INDEX.
+FB.EXPANSION_INDEX = {
+    CLASSIC = 0, TBC = 1, WOTLK = 2, CATA = 3, MOP = 4,
+    WOD = 5, LEGION = 6, BFA = 7, SL = 8, DF = 9, TWW = 10, MIDNIGHT = 11,
+}
+-- Current expansion ordinal (update to 12 when the next expansion launches).
+FB.CURRENT_EXPANSION_INDEX = 11  -- Midnight
+
 -- Class colors (for weekly tracker)
 FB.CLASS_COLORS = {
     WARRIOR     = "C69B6D",

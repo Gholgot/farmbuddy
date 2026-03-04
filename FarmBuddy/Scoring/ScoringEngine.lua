@@ -678,7 +678,12 @@ function FB.Scoring:BuildExplanation(input, data)
     -- TIME GATE
     -- ---------------------------------------------------------------
     if input.timeGate == "none" or input.timeGate == nil then
-        if not data.isInstantAvailable and not isDropMount then
+        -- MED-3: Only mention "no lockout" for drop-type sources where lockout
+        -- context is meaningful. Vendor/TCG/RAF have no lockout by definition
+        -- so labelling them "no lockout" is noise.
+        local isDropSourceType = (sourceType == "raid_drop" or sourceType == "dungeon_drop"
+            or sourceType == "world_drop" or sourceType == "world_boss")
+        if not data.isInstantAvailable and not isDropMount and isDropSourceType then
             parts[#parts + 1] = "no lockout"
         end
     elseif input.timeGate == "weekly" then

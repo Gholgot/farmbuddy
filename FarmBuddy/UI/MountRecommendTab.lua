@@ -57,6 +57,8 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     filterBar:AddCheckbox("showAchievement", "Ach", true)
     -- Vendor mounts are trivially obtainable (just buy them), so off by default
     filterBar:AddCheckbox("showVendor", "Vend", false)
+    -- MED-6: TCG mounts are obtainable via the Auction House for gold, so on by default
+    filterBar:AddCheckbox("showTCG", "TCG", true)
     filterBar:AddCheckbox("showEvent", "Event", true)
     filterBar:AddCheckbox("showProfession", "Prof", true)
     filterBar:AddCheckbox("showPvP", "PvP", true)
@@ -102,12 +104,13 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
         FB.UI.MountRecommendTab:ApplyFilters()
     end)
 
-    -- #25: Goal progress display with inline progress bar
+    -- #25: Goal progress display with inline progress bar.
+    -- CRIT-2: goalBarFrame collapses to height 0 when inactive so that the
+    -- contentFrame (anchored to its BOTTOMLEFT) sits flush with filterBar.
     local goalBarFrame = CreateFrame("Frame", nil, panel)
     goalBarFrame:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", 0, -3)
     goalBarFrame:SetPoint("RIGHT", filterBar.frame, "RIGHT", 0, 0)
-    goalBarFrame:SetHeight(16)
-    goalBarFrame:Hide()
+    goalBarFrame:SetHeight(0)   -- starts collapsed; expanded to 16 when goal is active
 
     -- Background bar
     local goalBg = goalBarFrame:CreateTexture(nil, "BACKGROUND")
@@ -131,9 +134,12 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     self.goalFill = goalFill
     self.goalText = goalText
 
-    -- Results area: left list + right details (anchored below filter bar)
+    -- Results area: left list + right details.
+    -- Anchored below goalBarFrame so it correctly accounts for whether the goal
+    -- bar is shown. When goalBarFrame is hidden it still has zero height and the
+    -- BOTTOMLEFT anchor keeps the contentFrame flush with filterBar.frame.
     local contentFrame = CreateFrame("Frame", nil, panel)
-    contentFrame:SetPoint("TOPLEFT", filterBar.frame, "BOTTOMLEFT", -5, -5)
+    contentFrame:SetPoint("TOPLEFT", goalBarFrame, "BOTTOMLEFT", 0, -5)
     contentFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 5)
 
     -- Scroll list (left 60%)
@@ -195,6 +201,13 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     presetBtn:SetScript("OnClick", function(self)
         FB.UI.MountRecommendTab:ShowPresetMenu(self)
     end)
+
+    -- CRIT-3: Clear module-level scanResults when a mount is collected so stale
+    -- data is never displayed. Events.lua already nils FB.db.cachedMountScores;
+    -- we also need to nil the local scanResults copy held by this module.
+    FB:RegisterEvent("NEW_MOUNT_ADDED", FB.UI.MountRecommendTab, function(self, event, mountID)
+        scanResults = nil
+    end)
 end
 
 -- Built-in filter presets
@@ -206,7 +219,7 @@ local BUILT_IN_PRESETS = {
             availableOnly = true,
             showRaidDrop = true, showDungeonDrop = true, showWorldDrop = true,
             showReputation = true, showCurrency = true, showQuestChain = true,
-            showAchievement = true, showVendor = true, showEvent = true,
+            showAchievement = true, showVendor = true, showTCG = true, showEvent = true,
             showProfession = true, showPvP = true, showTradingPost = true,
             showRAF = true,
         },
@@ -216,7 +229,7 @@ local BUILT_IN_PRESETS = {
         filters = {
             showRaidDrop = true, showDungeonDrop = false, showWorldDrop = false,
             showReputation = false, showCurrency = false, showQuestChain = false,
-            showAchievement = false, showVendor = false, showEvent = false,
+            showAchievement = false, showVendor = false, showTCG = false, showEvent = false,
             showProfession = false, showPvP = false, showTradingPost = false,
             showRAF = false,
             soloOnly = false, availableOnly = false,
@@ -228,7 +241,7 @@ local BUILT_IN_PRESETS = {
             soloOnly = true, availableOnly = false,
             showRaidDrop = true, showDungeonDrop = true, showWorldDrop = false,
             showReputation = false, showCurrency = false, showQuestChain = false,
-            showAchievement = false, showVendor = false, showEvent = false,
+            showAchievement = false, showVendor = false, showTCG = false, showEvent = false,
             showProfession = false, showPvP = false, showTradingPost = false,
             showRAF = false,
         },
@@ -238,7 +251,7 @@ local BUILT_IN_PRESETS = {
         filters = {
             showRaidDrop = false, showDungeonDrop = false, showWorldDrop = false,
             showReputation = true, showCurrency = true, showQuestChain = false,
-            showAchievement = false, showVendor = true, showEvent = false,
+            showAchievement = false, showVendor = true, showTCG = false, showEvent = false,
             showProfession = false, showPvP = false, showTradingPost = true,
             showRAF = false,
             soloOnly = false, availableOnly = false,
@@ -249,7 +262,7 @@ local BUILT_IN_PRESETS = {
         filters = {
             showRaidDrop = true, showDungeonDrop = true, showWorldDrop = true,
             showReputation = true, showCurrency = true, showQuestChain = true,
-            showAchievement = true, showVendor = true, showEvent = true,
+            showAchievement = true, showVendor = true, showTCG = true, showEvent = true,
             showProfession = true, showPvP = true, showTradingPost = true,
             showRAF = true,
             soloOnly = false, availableOnly = false,
@@ -404,6 +417,21 @@ function FB.UI.MountRecommendTab:SaveCurrentPreset()
     dialog:Show()
 end
 
+-- LOW-3: Format the scan timestamp as a human-readable "X ago" string.
+local function FormatScanAge(lastScanTime)
+    if not lastScanTime or lastScanTime == 0 then return "this session" end
+    local elapsed = time() - lastScanTime
+    if elapsed < 60 then
+        return "just now"
+    elseif elapsed < 3600 then
+        return string.format("%dm ago", math.floor(elapsed / 60))
+    elseif elapsed < 86400 then
+        return string.format("%dh ago", math.floor(elapsed / 3600))
+    else
+        return string.format("%dd ago", math.floor(elapsed / 86400))
+    end
+end
+
 function FB.UI.MountRecommendTab:OnShow()
     -- Check for cached results
     local cached = FB.Mounts.Scanner:GetCachedResults()
@@ -412,7 +440,9 @@ function FB.UI.MountRecommendTab:OnShow()
         self:ApplyFilters()
         progressBar:Hide()
         filterBar.frame:Show()
-        self.statusLabel:SetText(string.format("%d mounts scored | Last scan: this session", #cached))
+        -- LOW-3: Show actual scan age rather than hardcoded "this session"
+        local scanAge = FB.charDB and FormatScanAge(FB.charDB.lastMountScan) or "this session"
+        self.statusLabel:SetText(string.format("%d mounts scored | Last scan: %s", #cached, scanAge))
     elseif not autoScanned and not scanHandle then
         -- #3: Auto-scan on first open when no cached results exist
         autoScanned = true
@@ -591,6 +621,8 @@ end
 function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
     if not self.goalBar then return end
     if not FB.db or not FB.db.goals then
+        -- CRIT-2: collapse height to 0 so contentFrame anchor has no gap
+        self.goalBar:SetHeight(0)
         self.goalBar:Hide()
         return
     end
@@ -660,8 +692,12 @@ function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
         if self.goalText then
             self.goalText:SetText(text)
         end
+        -- CRIT-2: expand to 16px and show when goal is active
+        self.goalBar:SetHeight(16)
         self.goalBar:Show()
     else
+        -- CRIT-2: collapse to 0px so contentFrame has no gap
+        self.goalBar:SetHeight(0)
         self.goalBar:Hide()
     end
 end
