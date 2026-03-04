@@ -317,11 +317,16 @@ function FB.UI.Widgets:CreateScrollList(parent, name, rowHeight)
                     row.timeText:SetText("")
                 end
 
-                -- Status
+                -- FIX-5: Status badge — color-coded availability indicator
+                -- [GO]  green = available now (can attempt immediately)
+                -- [ALT] yellow = current char locked, but an alt can go
+                -- [--]  red = locked this reset
                 if item.immediatelyAvailable then
-                    row.statusText:SetText(FB.COLORS.GREEN .. "Available|r")
+                    row.statusText:SetText("|cFF00FF00[GO]|r")
+                elseif item.warbandAvailable and item.warbandAvailable > 0 then
+                    row.statusText:SetText("|cFFFFDD00[ALT]|r")
                 else
-                    row.statusText:SetText(FB.COLORS.RED .. "Locked|r")
+                    row.statusText:SetText("|cFFAAAAAA[--]|r")
                 end
 
                 -- #7: Show/hide selected highlight

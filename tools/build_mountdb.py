@@ -404,11 +404,11 @@ BOSS_TO_INSTANCE = {
 # Only specified fields are overridden — the full entry is NOT replaced.
 CURATED_OVERRIDES = {
     # Guaranteed drops (100% or former 100%)
-    59569: {"dropChance": 1.0, "lockoutInstanceName": "Obsidian Sanctum", "expansion": "WOTLK"},   # Twilight Drake (OS 3D 25)
     59571: {"dropChance": 1.0},                                                                     # Twilight Drake (alt spellID — guaranteed OS 3D 25)
     59568: {"dropChance": 1.0, "lockoutInstanceName": "Obsidian Sanctum", "expansion": "WOTLK"},   # Black Drake (OS 3D 10)
     59996: {"lockoutInstanceName": "Utgarde Pinnacle", "expansion": "WOTLK"},                       # Blue Proto-Drake
-    43951: {"dropChance": 1.0, "lockoutInstanceName": "Stratholme", "expansion": "WOTLK"},          # Bronze Drake (CoT Strat timed)
+    # NOTE: 59569 (Twilight Drake 25), 43951 (Bronze Drake), 171851 (Garn Nighthowl) defined below
+    # in the ME-B section with richer data (timeGate, sourceType, difficultyID)
     69395: {"lockoutInstanceName": "Onyxia's Lair", "expansion": "CATA", "difficultyID": 4},         # Onyxian Drake (Onyxia's Lair 25-man, WOTLK re-release)
     97493: {"lockoutInstanceName": "Dragon Soul", "expansion": "CATA"},                             # Experiment 12-B
     6898:  {"lockoutInstanceName": "Stratholme", "expansion": "CLASSIC"},                           # Deathcharger (Baron Rivendare)
@@ -662,8 +662,6 @@ CURATED_OVERRIDES = {
     66063:  {"lockoutInstanceName": "Trial of the Crusader", "expansion": "WOTLK"},   # Crusader's Black Warhorse
     # CATA — Ruby Sanctum
     74918:  {"lockoutInstanceName": "Ruby Sanctum", "expansion": "CATA"},             # Reins of the Onyxian Drake (if present)
-    # MOP — Throne of Thunder additional
-    136471: {"lockoutInstanceName": "Throne of Thunder", "expansion": "MOP"},         # already exists, no change
     # Heart of Fear
     139450: {"lockoutInstanceName": "Heart of Fear", "expansion": "MOP"},             # Grand Empress Shek'zeer mount
     # Terrace of Endless Spring
@@ -678,8 +676,6 @@ CURATED_OVERRIDES = {
     6899:   {"expansion": "CLASSIC"}, # Deathcharger's Reins (Baron Rivendare - Stratholme)
     # TBC dungeon drops
     35513:  {"expansion": "TBC"},     # Fiery Warhorse (Karazhan - already covered)
-    # WOTLK dungeon drops
-    59996:  {"expansion": "WOTLK"},   # Blue Proto-Drake (Utgarde Pinnacle)
     # Achievement mounts missing expansion (common ones)
     29151:  {"expansion": "CLASSIC"}, # Black War Bear? or similar classic achievement
     # BFA misc
@@ -890,7 +886,7 @@ CURATED_OVERRIDES = {
     1263635: {"expansion": "MIDNIGHT"},   # Spectral Hawkstrider
 
     # --- WOD world drops ---
-    171851: {"sourceType": "world_drop",  "expansion": "WOD", "dropChance": 1.0},   # Garn Nighthowl (Nok-Karosh, guaranteed)
+    # NOTE: 171851 (Garn Nighthowl) defined below in ME-B section with timeGate field
     189364: {"sourceType": "world_drop",  "expansion": "WOD"},                       # Coalfist Gronnling (garrison invasion rare)
 
     # --- WOTLK ---
@@ -899,6 +895,46 @@ CURATED_OVERRIDES = {
              "lockoutInstanceName": "Obsidian Sanctum"},          # Black Drake (OS 3D 10-man, guaranteed)
     # 62048 Illidari Doomhawk: keep as raid_drop WOTLK pending further research
     62048:  {"expansion": "WOTLK"},                                                   # Illidari Doomhawk (unconfirmed, keeping raid_drop)
+
+    # ---------------------------------------------------------------------------
+    # ME-B: Hardcoded drop rates for well-known mechanically-guaranteed or
+    # confirmed-rate mounts that automated sources can't capture.
+    # ---------------------------------------------------------------------------
+
+    # Guaranteed drops (100%) — mechanically tied to specific conditions
+    43951:  {"dropChance": 1.0, "timeGate": "none", "sourceType": "dungeon_drop",
+             "lockoutInstanceName": "Stratholme", "expansion": "WOTLK"},  # Bronze Drake (CoT Strat timed run)
+    59569:  {"dropChance": 1.0, "lockoutInstanceName": "Obsidian Sanctum",
+             "expansion": "WOTLK", "difficultyID": 4},            # Twilight Drake (OS 3D 25-man)
+    171851: {"dropChance": 1.0, "expansion": "WOD", "sourceType": "world_drop",
+             "timeGate": "weekly"},                                # Garn Nighthowl (Nok-Karosh, guaranteed)
+
+    # Confirmed high rates from community data mining
+    136163: {"dropChance": 0.01, "lockoutInstanceName": "Throne of Thunder",
+             "expansion": "MOP", "difficultyID": 6},              # Clutch of Ji-Kun (actually 107531 is also listed)
+    107531: {"dropChance": 0.01, "lockoutInstanceName": "Throne of Thunder",
+             "expansion": "MOP", "difficultyID": 6},              # Clutch of Ji-Kun (alternate spellID)
+    308786: {"dropChance": 0.01, "lockoutInstanceName": "Ny'alotha, the Waking City",
+             "expansion": "BFA", "difficultyID": 16},             # Ny'alotha Allseer (N'Zoth Mythic)
+    335566: {"dropChance": 0.01, "sourceType": "dungeon_drop",
+             "lockoutInstanceName": "Theater of Pain",
+             "expansion": "SL", "timeGate": "none"},              # Marrowfang
+    273012: {"dropChance": 0.01, "sourceType": "dungeon_drop",
+             "lockoutInstanceName": "Operation: Mechagon",
+             "expansion": "BFA", "timeGate": "none"},             # G.M.O.D.
+    267319: {"dropChance": 0.03, "sourceType": "dungeon_drop",
+             "lockoutInstanceName": "The Underrot",
+             "expansion": "BFA", "timeGate": "none"},             # Underrot Crawg (~3% community data)
+
+    # TWW/DF confirmed rates
+    413933: {"dropChance": 0.01, "lockoutInstanceName": "Amirdrassil, the Dream's Hope",
+             "expansion": "DF", "difficultyID": 16},              # Anu'relos (Fyrakk Mythic)
+    451939: {"dropChance": 0.01, "lockoutInstanceName": "Nerub-ar Palace",
+             "expansion": "TWW", "difficultyID": 16},             # Sureki Skyrazor (Queen Ansurek Mythic)
+
+    # Liberation of Undermine raid mounts (TWW Season 2, ~1% each)
+    1258990: {"dropChance": 0.01, "lockoutInstanceName": "Liberation of Undermine",
+              "expansion": "TWW", "difficultyID": 16},            # Chrome King Gallywix Mythic mount
 }
 
 
@@ -1201,7 +1237,13 @@ def fetch_blizzard_achievements():
     """Fetch achievement reward names from wago.tools Achievement DB2 CSV.
 
     Returns a dict mapping reward_mount_name_lowercase -> achievement_id
-    for all achievements whose Reward_lang field mentions a mount.
+    for all achievements whose Reward_lang field looks like a mount reward.
+
+    ME-A: Extended matching — in addition to Reward_lang containing "mount",
+    we also capture reward text matching common mount name patterns
+    (reins, saddle, drake, wyrm, hippogryph, steed, charger, etc.)
+    so that achievements whose reward text lists the mount name directly
+    (e.g. "Ashes of Al'ar") are also resolved.
     """
     print("\n[2B] Fetching wago.tools Achievement DB2...")
     csv_text = cached_get(
@@ -1209,6 +1251,15 @@ def fetch_blizzard_achievements():
         "wago_achievement.csv",
         max_age_hours=72,
     )
+
+    # Keywords that strongly indicate a mount reward even without the word "mount"
+    MOUNT_REWARD_KEYWORDS = [
+        "mount", "reins", "saddle", "drake", "wyrm", "dragon", "hippogryph",
+        "steed", "charger", "courser", "warhorse", "hawkstrider", "proto-drake",
+        "wyvern", "gryphon", "netherdrake", "protodrake", "rutsah",
+        "cloud serpent", "serpent", "elekk", "kodo", "raptor", "wolf", "tiger",
+        "bear", "mammoth", "golem", "ravager", "ravern", "nether ray",
+    ]
 
     # Maps: exact_lower -> id, normalized_lower -> id
     reward_map = {}
@@ -1219,7 +1270,9 @@ def fetch_blizzard_achievements():
         reward = row.get("Reward_lang", "").strip()
         if not reward:
             continue
-        if "mount" not in reward.lower():
+
+        reward_lower = reward.lower()
+        if not any(kw in reward_lower for kw in MOUNT_REWARD_KEYWORDS):
             continue
 
         aid_str = row.get("ID", "").strip()
@@ -2269,9 +2322,10 @@ def merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
         if ach_id:
             entry["achievementID"] = ach_id
 
-        # ---- Expansion: use Rarity's file-based expansion if present,
+        # ---- Expansion: use Rarity's file-based expansion if present and valid,
         #      otherwise use the 3-layer infer_expansion strategy ----
-        if "expansion" not in entry or entry["expansion"] is None:
+        # QW-C: Also run inference when expansion is "UNKNOWN" (Rarity file not in map)
+        if not entry.get("expansion") or entry["expansion"] == "UNKNOWN":
             entry["expansion"] = infer_expansion(spell_id, rarity, wago, instance_data)
 
         # ---- Source type from wago.tools enum if still missing ----
@@ -2451,6 +2505,21 @@ def merge_data(wago_mounts, blizzard_data, rarity_data, rarity_stats,
                 new_steps = generate_steps(merged[spell_id], wago, wh_entry, achievement_name_map or {})
                 if new_steps:
                     merged[spell_id]["steps"] = new_steps
+
+    # ---- QW-C: Final expansion inference sweep ----
+    # Apply SpellID range heuristic to any mount still missing expansion
+    # after all source merging. This handles achievement/vendor mounts that
+    # have no Rarity data and no text clues, but have a known spell ID range.
+    no_exp_before = sum(1 for e in merged.values() if not e.get("expansion"))
+    for spell_id, entry in merged.items():
+        if not entry.get("expansion"):
+            guessed = guess_expansion_from_spell_id(spell_id)
+            if guessed:
+                entry["expansion"] = guessed
+    no_exp_after = sum(1 for e in merged.values() if not e.get("expansion"))
+    if no_exp_before > 0:
+        print(f"  QW-C: Expansion inference fixed {no_exp_before - no_exp_after} mounts "
+              f"({no_exp_after} still missing expansion)")
 
     print(f"  Merged database: {len(merged)} mounts")
     return merged

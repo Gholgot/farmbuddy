@@ -949,7 +949,205 @@ FB.MountDB.entries = {
             "Or purchase from AH (~30-80k gold typically)",
         },
     },
+
+    -- =====================
+    -- ME-B: WELL-KNOWN GUARANTEED / HIGH-RATE DROP MOUNTS
+    -- These are mechanically guaranteed (or near-so) but have no data from automated sources.
+    -- =====================
+
+    [43951] = { -- Bronze Drake (Culling of Stratholme timed run)
+        sourceType = "dungeon_drop",
+        expansion = "WOTLK",
+        timeGate = "none",  -- Normal mode is farmable with resets
+        timePerAttempt = 15,
+        groupRequirement = "solo",
+        dropChance = 1.0,   -- 100% guaranteed if you beat the timed run
+        lockoutInstanceName = "Stratholme",
+        steps = {
+            "Enter The Culling of Stratholme (Caverns of Time) on any difficulty",
+            "Complete the dungeon within the timed run (~25 min)",
+            "Chromie rewards Bronze Drake — 100% guaranteed for completing timed run",
+            "Farmable: reset Normal mode and repeat (up to 10/hour)",
+        },
+    },
+    [59569] = { -- Twilight Drake (Obsidian Sanctum 3 Drakes alive, 25-man)
+        sourceType = "raid_drop",
+        expansion = "WOTLK",
+        timeGate = "weekly",
+        timePerAttempt = 5,
+        groupRequirement = "solo",
+        dropChance = 1.0,   -- 100% guaranteed when 3 drakes are left alive
+        lockoutInstanceName = "Obsidian Sanctum",
+        difficultyID = 4,
+        steps = {
+            "Enter Obsidian Sanctum 25-player Normal",
+            "Leave all 3 drakes (Shadron, Tenebron, Vesperon) alive",
+            "Defeat Sartharion with 3 drakes — Twilight Drake is guaranteed",
+        },
+    },
+    [59650] = { -- Black Drake (Obsidian Sanctum 3 Drakes alive, 10-man)
+        sourceType = "raid_drop",
+        expansion = "WOTLK",
+        timeGate = "weekly",
+        timePerAttempt = 5,
+        groupRequirement = "solo",
+        dropChance = 1.0,   -- 100% guaranteed when 3 drakes are left alive
+        lockoutInstanceName = "Obsidian Sanctum",
+        difficultyID = 3,
+        steps = {
+            "Enter Obsidian Sanctum 10-player Normal",
+            "Leave all 3 drakes (Shadron, Tenebron, Vesperon) alive",
+            "Defeat Sartharion with 3 drakes — Black Drake is guaranteed",
+        },
+    },
+    [98204] = { -- Amani Battle Bear (Zul'Aman timed run, Heroic)
+        sourceType = "dungeon_drop",
+        expansion = "CATA",
+        timeGate = "daily",
+        timePerAttempt = 20,
+        groupRequirement = "solo",
+        dropChance = 1.0,   -- 100% guaranteed if you rescue all 4 sacrifices before final boss
+        lockoutInstanceName = "Zul'Aman",
+        difficultyID = 2,
+        steps = {
+            "Enter Zul'Aman on Heroic difficulty",
+            "Race through the timed rescue event",
+            "Rescue all 4 captives before Zul'jin resets the timer",
+            "Amani Battle Bear is guaranteed in the final chest",
+        },
+    },
+    [171851] = { -- Garn Nighthowl (Nok-Karosh world boss, WoD)
+        sourceType = "world_drop",
+        expansion = "WOD",
+        timeGate = "weekly",
+        timePerAttempt = 5,
+        groupRequirement = "solo",
+        dropChance = 1.0,   -- 100% guaranteed drop from Nok-Karosh
+        steps = {
+            "Locate Nok-Karosh (rare wolf NPC) in Frostfire Ridge",
+            "Defeat Nok-Karosh — Garn Nighthowl is a guaranteed drop",
+            "Weekly lockout per character",
+        },
+    },
+
+    -- =====================
+    -- ME-B: POPULAR RAID DROPS WITH KNOWN RATES (from community data mining)
+    -- =====================
+    [107531] = { -- Clutch of Ji-Kun (Throne of Thunder)
+        sourceType = "raid_drop",
+        expansion = "MOP",
+        timeGate = "weekly",
+        timePerAttempt = 20,
+        groupRequirement = "solo",
+        dropChance = 0.01,
+        lockoutInstanceName = "Throne of Thunder",
+        difficultyID = 6,
+        steps = {
+            "Enter Throne of Thunder on Heroic 25",
+            "Defeat Ji-Kun — ~1% drop chance",
+        },
+    },
+    [308786] = { -- Ny'alotha Allseer (N'Zoth Mythic, Ny'alotha)
+        sourceType = "raid_drop",
+        expansion = "BFA",
+        timeGate = "weekly",
+        timePerAttempt = 30,
+        groupRequirement = "small",
+        dropChance = 0.01,
+        lockoutInstanceName = "Ny'alotha, the Waking City",
+        difficultyID = 16,
+        steps = {
+            "Enter Ny'alotha, the Waking City on Mythic",
+            "Clear to N'Zoth the Corruptor",
+            "Defeat N'Zoth — ~1% drop chance (may need small group)",
+        },
+    },
+    [335566] = { -- Marrowfang (Theater of Pain)
+        sourceType = "dungeon_drop",
+        expansion = "SL",
+        timeGate = "none",
+        timePerAttempt = 10,
+        groupRequirement = "solo",
+        dropChance = 0.01,
+        lockoutInstanceName = "Theater of Pain",
+        steps = {
+            "Enter Theater of Pain (Normal — farmable, no Heroic lockout restriction)",
+            "Defeat An Affront of Challengers",
+            "~1% drop chance",
+        },
+    },
+    [413933] = { -- Anu'relos, Flame's Guidance (Amirdrassil Fyrakk Mythic)
+        sourceType = "raid_drop",
+        expansion = "DF",
+        timeGate = "weekly",
+        timePerAttempt = 30,
+        groupRequirement = "small",
+        dropChance = 0.01,
+        lockoutInstanceName = "Amirdrassil, the Dream's Hope",
+        difficultyID = 16,
+        steps = {
+            "Enter Amirdrassil, the Dream's Hope on Mythic",
+            "Clear to Fyrakk the Blazing",
+            "Defeat Fyrakk — ~1% drop chance",
+        },
+    },
+    [451939] = { -- Sureki Skyrazor (Nerub-ar Palace Mythic)
+        sourceType = "raid_drop",
+        expansion = "TWW",
+        timeGate = "weekly",
+        timePerAttempt = 30,
+        groupRequirement = "small",
+        dropChance = 0.01,
+        lockoutInstanceName = "Nerub-ar Palace",
+        difficultyID = 16,
+        steps = {
+            "Enter Nerub-ar Palace on Mythic",
+            "Clear to Queen Ansurek",
+            "Defeat Queen Ansurek — ~1% drop chance",
+        },
+    },
+    [267319] = { -- Underrot Crawg (Underrot dungeon)
+        sourceType = "dungeon_drop",
+        expansion = "BFA",
+        timeGate = "none",
+        timePerAttempt = 8,
+        groupRequirement = "solo",
+        dropChance = 0.03,
+        lockoutInstanceName = "The Underrot",
+        steps = {
+            "Enter The Underrot on Normal (farmable with resets)",
+            "Defeat Unbound Abomination (final boss) — ~3% drop chance",
+        },
+    },
+    [273012] = { -- G.M.O.D. (King Mechagon / Operation Mechagon)
+        sourceType = "dungeon_drop",
+        expansion = "BFA",
+        timeGate = "none",
+        timePerAttempt = 20,
+        groupRequirement = "solo",
+        dropChance = 0.01,
+        lockoutInstanceName = "Operation: Mechagon",
+        steps = {
+            "Enter Operation: Mechagon on Mythic (farmable — Mythic only, no weekly lockout on this dungeon)",
+            "Defeat HK-8 Aerial Oppression Unit or King Mechagon",
+            "~1% drop chance from HK-8 or final boss chest",
+        },
+    },
+    [290467] = { -- Aerial Unit R-21/X (Mechagon workshop rare)
+        sourceType = "world_drop",
+        expansion = "BFA",
+        timeGate = "none",
+        timePerAttempt = 30,
+        groupRequirement = "solo",
+        dropChance = 0.01,
+        steps = {
+            "Farm rares in Mechagon (multiple unique rares drop this)",
+            "Spawns on Mechagon Island — ~1% from rare mobs",
+            "Check kill list on WoWHead for which rares can drop it",
+        },
+    },
 }
+
 
 -- Helper: get metadata for a mount by spellID
 function FB.MountDB:Get(spellID)

@@ -118,6 +118,8 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                 currencyRequired = input.currencyRequired,
                 achievementID = input.achievementID,
                 goldCost = input.goldCost,
+                goldTier = input.goldTier,
+                requirementProgress = input.requirementProgress,
                 itemCosts = input.itemCosts,
                 faction = input.faction,
                 isFactionSpecific = input.isFactionSpecific,
@@ -125,6 +127,9 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                 difficultyID = input.difficultyID,
                 attemptsRemaining = input.attemptsRemaining,
                 rarity = input.rarity,
+                repEstimatedDays = input.repEstimatedDays,
+                repMethod = input.repMethod,
+                repDataCurated = input.repDataCurated,
                 warbandAvailable = input.warbandAvailable,
                 warbandTotal = input.warbandTotal,
                 staleDays = input.staleDays,
@@ -187,6 +192,13 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                         currencyID = r.currencyID,
                         achievementID = r.achievementID,
                         goldCost = r.goldCost,
+                        goldTier = r.goldTier,
+                        rarity = r.rarity,
+                        repEstimatedDays = r.repEstimatedDays,
+                        repMethod = r.repMethod,
+                        repDataCurated = r.repDataCurated,
+                        steps = r.steps,
+                        requirementProgress = r.requirementProgress,
                     }, weights)
                     r.score = rescore.score
                     r.components = rescore.components
@@ -252,16 +264,33 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
                 end
             end
 
-            -- Enforce 50% discount cap including post-scan bonuses
+            -- Enforce minimum score floor including post-scan bonuses.
+            -- Instant-available mounts (vendor buy-now, complete quests, etc.) are
+            -- intentionally exempt so they remain at the very top of the list.
+            -- All other mounts are floored at 20% of their pre-bonus component sum.
             for _, r in ipairs(results) do
                 if r.components then
-                    local weights = FB.Scoring:GetWeights()
-                    local preBonusScore = (r.components.progress * math.max(0, weights.progressRemaining or 1.0))
-                                        + (r.components.time     * math.max(0, weights.timePerAttempt or 1.0))
-                                        + (r.components.gate     * math.max(0, weights.timeGate or 1.5))
-                                        + (r.components.group    * math.max(0, weights.groupRequirement or 1.2))
-                                        + (r.components.effort   * math.max(0, weights.effort or 1.0))
-                    r.score = math.max(r.score, preBonusScore * 0.50)
+                    -- Identify instant-acquisition mounts (mirrors ScoringEngine.isInstantAvailable).
+                    -- Vendor/TCG/RAF mounts with no tracked requirements are treated as instant
+                    -- even when progressRemaining=1.0 (untracked means no barriers detected).
+                    local vendorNoReqs = (r.sourceType == "vendor" or r.sourceType == "tcg"
+                        or r.sourceType == "recruit_a_friend")
+                        and not r.factionID and not r.currencyID and not r.achievementID
+                        and (not r.goldCost or r.goldCost == 0)
+                        and (r.timeGate == "none" or r.timeGate == nil)
+                    local isInstant = r.immediatelyAvailable
+                        and (not r.dropChance or r.dropChance >= 1.0)
+                        and (r.timeGate == "none" or r.timeGate == nil)
+                        and ((r.progressRemaining or 1.0) <= 0.05 or vendorNoReqs)
+                    if not isInstant then
+                        local w = FB.Scoring:GetWeights()
+                        local preBonusScore = (r.components.progress * math.max(0, w.progressRemaining or 1.0))
+                                            + (r.components.time     * math.max(0, w.timePerAttempt or 1.0))
+                                            + (r.components.gate     * math.max(0, w.timeGate or 1.5))
+                                            + (r.components.group    * math.max(0, w.groupRequirement or 1.2))
+                                            + (r.components.effort   * math.max(0, w.effort or 1.0))
+                        r.score = math.max(r.score, preBonusScore * 0.20)
+                    end
                 end
             end
 

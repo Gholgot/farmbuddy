@@ -75,13 +75,34 @@ local function ScanMountsByExpansion()
                     resolvedSourceType = resolvedSourceType or curMeta.sourceType
                 end
             end
+
+            -- Get sourceText and descriptionText for fallback resolution and unobtainable check
+            local extraOk, _, descriptionText, sourceText = pcall(C_MountJournal.GetMountInfoExtraByID, mountID)
+            if not extraOk then sourceText = ""; descriptionText = "" end
+
+            -- Fallback: use Resolver heuristics for mounts not in either DB
+            if not resolvedSourceType or resolvedSourceType == "unknown" then
+                if FB.Mounts and FB.Mounts.Resolver and FB.Mounts.Resolver.ResolveSourceType then
+                    local guessed = FB.Mounts.Resolver:ResolveSourceType(blizzSourceType, sourceText or "")
+                    if guessed then
+                        resolvedSourceType = guessed
+                    end
+                end
+            end
+            if not expansion then
+                if FB.Mounts and FB.Mounts.Resolver then
+                    if FB.Mounts.Resolver.GuessExpansion then
+                        expansion = FB.Mounts.Resolver:GuessExpansion(sourceText or "", descriptionText or "")
+                    end
+                    if not expansion and FB.Mounts.Resolver.GuessExpansionFromInstanceData then
+                        expansion = FB.Mounts.Resolver:GuessExpansionFromInstanceData(sourceText or "")
+                    end
+                end
+            end
+
             if not resolvedSourceType then
                 resolvedSourceType = "unknown"
             end
-
-            -- Get sourceText for unobtainable check
-            local extraOk, _, _, sourceText = pcall(C_MountJournal.GetMountInfoExtraByID, mountID)
-            if not extraOk then sourceText = "" end
 
             -- Check if unobtainable
             local isUnobtainable = false

@@ -55,7 +55,8 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
     filterBar:AddCheckbox("showCurrency", "Cur", true)
     filterBar:AddCheckbox("showQuestChain", "Quest", true)
     filterBar:AddCheckbox("showAchievement", "Ach", true)
-    filterBar:AddCheckbox("showVendor", "Vend", true)
+    -- Vendor mounts are trivially obtainable (just buy them), so off by default
+    filterBar:AddCheckbox("showVendor", "Vend", false)
     filterBar:AddCheckbox("showEvent", "Event", true)
     filterBar:AddCheckbox("showProfession", "Prof", true)
     filterBar:AddCheckbox("showPvP", "PvP", true)
@@ -78,6 +79,14 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
         ["TBC"]     = "The Burning Crusade",
         ["CLASSIC"] = "Classic",
     }, nil)
+    -- FIX-7: Sort order dropdown
+    filterBar:AddDropdown("sortOrder", "Sort", {
+        ["score"]     = "Best Score",
+        ["fastest"]   = "Fastest First",
+        ["droprate"]  = "Drop Rate (high)",
+        ["alpha"]     = "Alphabetical",
+    }, "score")
+
     -- Number of results dropdown
     local maxDefault = (FB.db and FB.db.settings and FB.db.settings.recommendations
         and FB.db.settings.recommendations.maxResults) or 20
@@ -146,6 +155,21 @@ function FB.UI.MountRecommendTab:Init(parentPanel)
             FB.Utils:OpenMountJournal(item.mountID)
         end
     end)
+
+    -- FIX-6: Empty-state label shown when no mounts match current filters
+    -- Wrap in a frame so we can anchor it properly without depending on leftFrame width at init time
+    local emptyHolder = CreateFrame("Frame", nil, leftFrame)
+    emptyHolder:SetPoint("TOPLEFT", leftFrame, "TOPLEFT", 10, -30)
+    emptyHolder:SetPoint("BOTTOMRIGHT", leftFrame, "BOTTOMRIGHT", -10, 30)
+    local emptyLabel = emptyHolder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    emptyLabel:SetAllPoints(emptyHolder)
+    emptyLabel:SetJustifyH("CENTER")
+    emptyLabel:SetJustifyV("MIDDLE")
+    emptyLabel:SetWordWrap(true)
+    emptyLabel:SetTextColor(0.6, 0.6, 0.6)
+    emptyLabel:SetText("No mounts match your current filters.\nTry adjusting filters or selecting a different preset.")
+    emptyHolder:Hide()
+    self.emptyLabel = emptyHolder
 
     -- Details panel (right) — shared widget
     local rightFrame = CreateFrame("Frame", nil, contentFrame)
@@ -448,9 +472,34 @@ function FB.UI.MountRecommendTab:ApplyFilters()
     -- Update goal progress display
     self:UpdateGoalProgress(filtered)
 
+    if not scrollList then return end
+
+    -- FIX-6: Show empty-state message when no mounts match the current filters
+    if #filtered == 0 then
+        -- Use a single placeholder item to show the no-results message
+        -- The scrollList will show it as a disabled/grey row
+        scrollList:SetData({})
+        self.statusLabel:SetText(
+            string.format(
+                "No mounts match your current filters (%d total scored). "
+                .. "Try adjusting filters or using a different preset.",
+                #scanResults
+            )
+        )
+        -- Show empty-state hint label if available
+        if self.emptyLabel then
+            self.emptyLabel:Show()
+        end
+        return
+    elseif self.emptyLabel then
+        self.emptyLabel:Hide()
+    end
+
+    -- Apply sort before limiting (FIX-7: sort order from dropdown)
+    filtered = self:SortResults(filtered, filters.sortOrder)
+
     -- Limit results based on maxResults setting
     local maxResults = tonumber(filters.maxResults) or 20
-    if not scrollList then return end
     if maxResults > 0 and #filtered > maxResults then
         local limited = {}
         for i = 1, maxResults do
@@ -469,6 +518,57 @@ function FB.UI.MountRecommendTab:ApplyFilters()
         FB.db.settings.recommendations = FB.db.settings.recommendations or {}
         FB.db.settings.recommendations.maxResults = maxResults
     end
+end
+
+-- FIX-7: Sort results by user-selected sort order
+-- @param results   table  - array of scored mount results (already filtered)
+-- @param sortOrder string - "score" | "fastest" | "droprate" | "alpha"
+-- @return sorted copy of results (does not mutate input)
+function FB.UI.MountRecommendTab:SortResults(results, sortOrder)
+    if not results or #results == 0 then return results end
+
+    -- Default: score order (already sorted from scanner, so just return)
+    if not sortOrder or sortOrder == "score" then
+        return results
+    end
+
+    -- Make a shallow copy to avoid mutating the scanner's cached results
+    local sorted = {}
+    for i, r in ipairs(results) do
+        sorted[i] = r
+    end
+
+    if sortOrder == "fastest" then
+        -- Sort by effectiveDays ascending (lowest first = fastest to obtain)
+        table.sort(sorted, function(a, b)
+            local da = a.effectiveDays or 99999
+            local db = b.effectiveDays or 99999
+            if da == db then
+                return (a.score or 99999) < (b.score or 99999)
+            end
+            return da < db
+        end)
+    elseif sortOrder == "droprate" then
+        -- Sort by drop chance descending (highest first = most likely to drop)
+        -- Guaranteed mounts (no dropChance) sort last
+        table.sort(sorted, function(a, b)
+            local da = a.dropChance or 0
+            local db = b.dropChance or 0
+            if da == db then
+                return (a.score or 99999) < (b.score or 99999)
+            end
+            return da > db
+        end)
+    elseif sortOrder == "alpha" then
+        -- Sort alphabetically by mount name
+        table.sort(sorted, function(a, b)
+            local na = (a.name or ""):lower()
+            local nb = (b.name or ""):lower()
+            return na < nb
+        end)
+    end
+
+    return sorted
 end
 
 function FB.UI.MountRecommendTab:SelectMount(item)

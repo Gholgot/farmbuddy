@@ -854,6 +854,18 @@ function FB.Mounts.Resolver:EnrichFromSourceText(input, sourceText, skipTypes)
         input.progressRemaining = worstProgress
     end
 
+    -- FIX-4: Store individual requirement progresses for multi-req display
+    -- Only store when there are 2+ incomplete requirements (otherwise it's redundant)
+    local multiReqCount = 0
+    for _, prog in pairs(progressValues) do
+        if prog and prog > 0.01 then
+            multiReqCount = multiReqCount + 1
+        end
+    end
+    if multiReqCount >= 2 then
+        input.requirementProgress = progressValues
+    end
+
     -- FIX-8C: Precise rep/renown time estimation using curated daily rates
     -- Replace hardcoded "30 dailies for any rep" with data-driven calculations
     if input.factionID and progressValues.rep and progressValues.rep > 0.01 then
@@ -877,25 +889,37 @@ function FB.Mounts.Resolver:EnrichFromSourceText(input, sourceText, skipTypes)
             if repDays then
                 input.repEstimatedDays = repDays
                 input.repMethod = repData.method
+                input.repDataCurated = true  -- FIX-2: mark as curated (not fallback)
                 input.expectedAttempts = repDays  -- 1 "attempt" = 1 day of rep farming
             end
         else
-            -- Fallback: scale by expansion age
+            -- Fallback: scale by expansion age (no curated daily rate data)
+            -- FIX-2: repDataCurated = false so explanation shows "(est.)" suffix
             local EXPANSION_INDEX = {
                 CLASSIC = 0, TBC = 1, WOTLK = 2, CATA = 3, MOP = 4,
                 WOD = 5, LEGION = 6, BFA = 7, SL = 8, DF = 9, TWW = 10, MIDNIGHT = 11,
             }
             local idx = input.expansion and EXPANSION_INDEX[input.expansion]
             local age = idx and (11 - idx) or nil
+            local fallbackDays
             if age and age >= 6 then
-                input.expectedAttempts = 10   -- Ancient rep: tabard farmable, fast
+                fallbackDays = 10   -- Ancient rep: tabard farmable, fast
+                input.expectedAttempts = 10
             elseif age and age >= 3 then
-                input.expectedAttempts = 20   -- Old rep: daily quests
+                fallbackDays = 20   -- Old rep: daily quests
+                input.expectedAttempts = 20
             elseif age and age >= 1 then
-                input.expectedAttempts = 30   -- Recent rep: mixed sources
+                fallbackDays = 30   -- Recent rep: mixed sources
+                input.expectedAttempts = 30
             else
-                input.expectedAttempts = 40   -- Current rep: weekly-capped renown
+                fallbackDays = 40   -- Current rep: weekly-capped renown
+                input.expectedAttempts = 40
             end
+            -- FIX-2: Store the fallback estimate so BuildExplanation can show it
+            -- with the "(est.)" marker rather than silently using effectiveDays
+            input.repEstimatedDays = fallbackDays
+            input.repMethod = "daily"
+            input.repDataCurated = false
         end
     end
 
@@ -1198,14 +1222,43 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
         end
 
         -- Estimate gold farming effort for vendor mounts with gold cost
+        -- Uses a tiered approach rather than a flat gold/hr rate:
+        --   < 10k gold   = trivial (short session of play)
+        --   10k - 100k   = moderate (several hours of content)
+        --   100k - 500k  = significant (many sessions, AH flipping, etc.)
+        --   500k+        = major time investment (BMAH, TCG-level prices)
         if input.goldCost and input.goldCost > 0 then
             local goldProgress = FB.ProgressResolver:GetGoldProgress(input.goldCost)
             if goldProgress > 0 then
-                local GOLD_PER_HOUR = 3000  -- Conservative estimate for raw gold farming
-                local hoursNeeded = (input.goldCost * goldProgress) / GOLD_PER_HOUR
+                local goldNeeded = input.goldCost * goldProgress  -- gold still required
+                local hoursNeeded
+                if goldNeeded < 10000 then
+                    -- Trivial: < 10k gold, ~1000g/hr casual play is plausible
+                    hoursNeeded = goldNeeded / 1000
+                elseif goldNeeded < 100000 then
+                    -- Moderate: 10k-100k, ~2000g/hr (dailies, AH, content)
+                    hoursNeeded = goldNeeded / 2000
+                elseif goldNeeded < 500000 then
+                    -- Significant: 100k-500k, ~1000g/hr realistic sustained rate
+                    hoursNeeded = goldNeeded / 1000
+                else
+                    -- Major barrier: 500k+, 500g/hr equivalent (very slow accumulation)
+                    -- This ensures 500k = 1000 hr = ~125 days @ 8hr/day
+                    hoursNeeded = goldNeeded / 500
+                end
                 -- Only override timePerAttempt if gold is the main blocker
                 if not input.factionID and not input.currencyID then
                     input.timePerAttempt = math.max(5, math.min(600, hoursNeeded * 60))
+                end
+                -- Store tier label for explanation
+                if goldNeeded < 10000 then
+                    input.goldTier = "trivial"
+                elseif goldNeeded < 100000 then
+                    input.goldTier = "moderate"
+                elseif goldNeeded < 500000 then
+                    input.goldTier = "significant"
+                else
+                    input.goldTier = "major"
                 end
             end
         end

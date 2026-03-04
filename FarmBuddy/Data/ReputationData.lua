@@ -125,6 +125,10 @@ FB.ReputationData = {
     [2472] = { name = "The Archivists' Codex",  dailyRep = 800,  weeklyRep = 1200, method = "daily",  expansion = "SL" },
     [2478] = { name = "The Enlightened",        dailyRep = 600,  weeklyRep = 1500, method = "daily",  expansion = "SL" },
 
+    -- Guardians of Hyjal (Cataclysm — Molten Front mount vendor)
+    -- factionID 1158 is referenced in MountDB.lua for the Flameward Hippogryph
+    [1158] = { name = "Guardians of Hyjal", dailyRep = 1500, weeklyRep = 0, method = "daily", expansion = "CATA" },
+
     -- ===========================
     -- DRAGONFLIGHT (Renown-based)
     -- ===========================
@@ -138,10 +142,27 @@ FB.ReputationData = {
     -- ===========================
     -- THE WAR WITHIN (Renown-based)
     -- ===========================
-    [2590] = { name = "Council of Dornogal",    dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
-    [2594] = { name = "The Assembly of the Deeps", dailyRep = 400, weeklyRep = 2500, method = "renown", expansion = "TWW" },
-    [2600] = { name = "Hallowfall Arathi",      dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
-    [2601] = { name = "The Severed Threads",    dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
-    -- FEAT-8: TWW Season 2 — The Cartels of Undermine gate mount purchases in patch 11.1
-    [2605] = { name = "The Cartels of Undermine", dailyRep = 400, weeklyRep = 2500, method = "renown", expansion = "TWW" },
+    -- Season 1 core factions (Khaz Algar)
+    [2590] = { name = "Council of Dornogal",       dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
+    [2594] = { name = "The Assembly of the Deeps", dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
+    [2600] = { name = "Hallowfall Arathi",          dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
+    [2601] = { name = "The Severed Threads",        dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
+    -- Season 2 (patch 11.1 — The Cartels of Undermine)
+    [2605] = { name = "The Cartels of Undermine",  dailyRep = 400,  weeklyRep = 2500, method = "renown", expansion = "TWW" },
+    -- ME-C: Season 1 Paragon factions (Awakening the Machine patch 11.0.7)
+    -- Paragon mount drops from reward caches when you exceed max renown
+    [2615] = { name = "Hallowfall Arathi (Paragon)", dailyRep = 400, weeklyRep = 2500, method = "renown", expansion = "TWW" },
+    -- General TWW world factions
+    [2607] = { name = "Radiant Song",              dailyRep = 300,  weeklyRep = 1500, method = "daily", expansion = "TWW" },
+    [2609] = { name = "City of Threads",            dailyRep = 300,  weeklyRep = 1500, method = "daily", expansion = "TWW" },
+
+    -- ===========================
+    -- MIDNIGHT (Renown-based) — factionIDs TBD when confirmed in-game
+    -- ===========================
+    -- Note: Midnight faction IDs are not yet confirmed in public data.
+    -- Placeholder entries below use estimated values based on TWW patterns.
+    -- Update these when factionIDs are confirmed in-game or via PTR data.
+    --
+    -- [XXXX] = { name = "Slayer's Duellum",   dailyRep = 400, weeklyRep = 2500, method = "renown", expansion = "MIDNIGHT" },
+    -- [XXXX] = { name = "<Midnight Faction>", dailyRep = 400, weeklyRep = 2500, method = "renown", expansion = "MIDNIGHT" },
 }
