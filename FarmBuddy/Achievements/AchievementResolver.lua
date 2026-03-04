@@ -53,10 +53,15 @@ function FB.Achievements.Resolver:IsUnobtainable(achievementID, name, descriptio
         }
         for _, pattern in ipairs(currentFoS) do
             if lowerName:find(pattern) then
-                -- Still might be from a past tier — check for current expansion keywords
+                -- Still might be from a past tier — check for current/upcoming expansion keywords.
+                -- BUG-11: Include Midnight keywords alongside TWW so this stays current.
+                -- TWW (10.0): war within, khaz algar, nerub-ar, liberation of undermine
+                -- Midnight (11.0): midnight, quel'thalas, avaloren
                 if lowerDesc:find("war within") or lowerDesc:find("khaz algar")
-                   or lowerDesc:find("nerub%-ar") or lowerDesc:find("liberation of undermine") then
-                    return false  -- Current tier FoS, keep
+                   or lowerDesc:find("nerub%-ar") or lowerDesc:find("liberation of undermine")
+                   or lowerDesc:find("midnight") or lowerDesc:find("quel'thalas")
+                   or lowerDesc:find("avaloren") then
+                    return false  -- Current/upcoming tier FoS, keep
                 end
             end
         end
@@ -196,9 +201,11 @@ function FB.Achievements.Resolver:Resolve(achievementID)
         local combinedText = lowerName .. " " .. lowerDesc
 
         -- Detect expansion from achievement text
+        -- BUG-11: Keep keyword list in sync with FoS check above; add Midnight keywords.
         local isCurrentExpansion = combinedText:find("war within") or combinedText:find("khaz algar")
             or combinedText:find("nerub%-ar") or combinedText:find("undermine")
             or combinedText:find("midnight") or combinedText:find("quel'thalas")
+            or combinedText:find("avaloren")
         local isLegacy = not isCurrentExpansion
 
         local isCatRaid = (categoryName and (categoryName:find("Raid") or categoryName:find("raid")))

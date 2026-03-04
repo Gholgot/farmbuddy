@@ -159,7 +159,7 @@ function FB.Achievements.Scanner:CollectAchievementIDs(categoryID)
             end
         else
             -- Fallback: two-arg GetAchievementInfo(catID, i)
-            local numOk, numAchievements = pcall(GetCategoryNumAchievements, catID, false)
+            local numOk, numAchievements = pcall(GetCategoryNumAchievements, catID)
             if not numOk then numAchievements = 0 end
             numAchievements = numAchievements or 0
 
@@ -208,8 +208,9 @@ function FB.Achievements.Scanner:FilterResults(results, filters)
             pass = false
         end
 
-        -- Hide completed
-        if filters.hideCompleted and r.progressRemaining ~= nil and r.progressRemaining <= 0 then
+        -- Hide near-complete (BUG-12: was <= 0 which is dead code since completed are pre-filtered;
+        -- changed to <= 0.05 so "Hide Near-Complete" hides achievements that are 95%+ done)
+        if filters.hideCompleted and r.progressRemaining ~= nil and r.progressRemaining <= 0.05 then
             pass = false
         end
 

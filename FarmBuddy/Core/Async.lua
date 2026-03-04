@@ -90,8 +90,18 @@ function FB.Async:RunBatched(items, workFunc, batchSize, onProgress, onComplete)
         end
         local ok, err = coroutine.resume(co)
         if not ok then
-            FB:Debug("Async coroutine error: " .. tostring(err))
+            -- BUG-7: Call onComplete so callers can clean up (re-enable buttons, hide progress bar).
+            -- Also print to chat for visibility during debugging.
+            local errMsg = tostring(err)
+            FB:Debug("Async coroutine error: " .. errMsg)
+            if FB.Print then
+                FB:Print("|cFFFF4444FarmBuddy scan error:|r " .. errMsg)
+            end
             if ticker then ticker:Cancel() end
+            if not completed and onComplete then
+                completed = true
+                onComplete(nil, errMsg)
+            end
             return
         end
         if onProgress then

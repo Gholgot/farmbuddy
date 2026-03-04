@@ -521,7 +521,7 @@ function FB.UI.AchievementTab:StartScanAllMounts()
         if ok and allCategories then
             local seen = {}
             for _, catID in ipairs(allCategories) do
-                local numOk, numAch = pcall(GetCategoryNumAchievements, catID, false)
+                local numOk, numAch = pcall(GetCategoryNumAchievements, catID)
                 if numOk and numAch and numAch > 0 then
                     for i = 1, numAch do
                         local achOk, achID = pcall(GetAchievementInfo, catID, i)

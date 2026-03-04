@@ -36,6 +36,8 @@ function FB.Mounts.Scanner:StartScan(onProgress, onComplete)
     -- Pre-compute warband summary once for the whole scan
     local warbandSummary = FB.CharacterData and FB.CharacterData.GetWarbandSummary
         and FB.CharacterData:GetWarbandSummary() or { totalChars = 1, totalLockouts = 0 }
+    -- BUG-10: Guard against fresh installs where no characters have been tracked yet
+    if warbandSummary.totalChars == 0 then warbandSummary.totalChars = 1 end
     local warbandTotal = warbandSummary.totalChars
 
     -- Pre-load attempt history for staleness tracking

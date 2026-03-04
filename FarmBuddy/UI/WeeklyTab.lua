@@ -31,17 +31,26 @@ local filterExpansion = nil
 local searchText = ""
 
 -- Calculate the most recent weekly reset timestamp.
--- BUG-9: Avoid date("!*t", ...) which may behave unexpectedly in WoW's sandboxed Lua.
--- Instead, compute purely from epoch arithmetic.
--- US resets Tuesday 15:00 UTC.  A known Tuesday 15:00 UTC anchor:
---   2024-01-02 15:00 UTC = epoch 1704207600.
--- Days since that anchor mod 7 gives offset to the most recent Tuesday reset.
-local KNOWN_RESET_EPOCH = 1704207600  -- 2024-01-02 15:00 UTC (Tuesday)
+-- BUG-5: Use C_DateAndTime.GetSecondsUntilWeeklyReset() when available so EU/APAC
+-- regions get their correct reset time instead of the hardcoded US Tuesday schedule.
+-- Fall back to the known-anchor arithmetic for clients where the API is unavailable.
+local KNOWN_RESET_EPOCH = 1704207600  -- 2024-01-02 15:00 UTC (Tuesday) — US anchor
 local WEEK_SECONDS      = 7 * 86400
 
 local function GetWeeklyResetTimestamp()
     local now = GetServerTime and GetServerTime() or time()
-    -- How many whole weeks have elapsed since the known anchor?
+
+    -- Prefer WoW API: derive reset time from seconds until next reset
+    if C_DateAndTime and C_DateAndTime.GetSecondsUntilWeeklyReset then
+        local ok, secondsUntil = pcall(C_DateAndTime.GetSecondsUntilWeeklyReset)
+        if ok and secondsUntil and secondsUntil > 0 then
+            local nextResetTS = now + secondsUntil
+            -- Most-recent reset = next reset minus one week
+            return nextResetTS - WEEK_SECONDS
+        end
+    end
+
+    -- Fallback: epoch arithmetic from the US Tuesday 15:00 UTC anchor
     local elapsed = now - KNOWN_RESET_EPOCH
     local weeksPast = math.floor(elapsed / WEEK_SECONDS)
     local resetTS = KNOWN_RESET_EPOCH + (weeksPast * WEEK_SECONDS)
@@ -275,6 +284,7 @@ function FB.UI.WeeklyTab:Init(parentPanel)
             OnAccept = function()
                 if FB.db then
                     FB.db.mountAttempts = {}
+                    FB.db.mountAttemptCounts = {}
                 end
                 FB.UI.WeeklyTab:RefreshGrid()
                 FB:Print("Mount attempt tracking cleared.")

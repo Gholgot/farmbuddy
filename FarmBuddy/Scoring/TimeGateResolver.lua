@@ -206,6 +206,8 @@ function FB.TimeGateResolver:IsHolidayEventActive(mountMeta)
                     local evOk, eventInfo = pcall(C_Calendar.GetDayEvent, 0, checkDay, i)
                     if evOk and eventInfo and eventInfo.title then
                         if eventInfo.title:lower():find(eventName) then
+                            -- BUG-4: Restore calendar to original month before returning
+                            pcall(C_Calendar.SetAbsMonth, currentDate.month, currentDate.year)
                             if dayOffset <= 0 then
                                 return true  -- Event is active now
                             else

@@ -5,6 +5,17 @@ FB.Mounts.Resolver = {}
 
 local C_MountJournal = C_MountJournal
 
+-- LOW-4: Expansion index aliases — declared at file scope so ALL functions can reference them.
+-- The authoritative definitions are in Constants.lua (FB.EXPANSION_INDEX / FB.CURRENT_EXPANSION_INDEX).
+-- These locals are initialised lazily on first use because Constants.lua may load after this file.
+local EXPANSION_INDEX, CURRENT_EXPANSION_INDEX
+local function EnsureExpansionLocals()
+    if not EXPANSION_INDEX then
+        EXPANSION_INDEX         = FB.EXPANSION_INDEX
+        CURRENT_EXPANSION_INDEX = FB.CURRENT_EXPANSION_INDEX
+    end
+end
+
 -- Blizzard's numeric sourceType values from GetMountInfoByID
 -- Maps to our internal source type strings
 local BLIZZ_SOURCE = {
@@ -901,6 +912,7 @@ function FB.Mounts.Resolver:EnrichFromSourceText(input, sourceText, skipTypes)
             -- Fallback: scale by expansion age (no curated daily rate data)
             -- FIX-2: repDataCurated = false so explanation shows "(est.)" suffix
             -- LOW-4: Uses the shared EXPANSION_INDEX alias (from FB.EXPANSION_INDEX in Constants.lua)
+            EnsureExpansionLocals()
             local idx = input.expansion and EXPANSION_INDEX[input.expansion]
             local age = idx and (CURRENT_EXPANSION_INDEX - idx) or nil
             local fallbackDays
@@ -1049,7 +1061,7 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
                 meta.factionID, meta.targetStanding, meta.targetRenown
             )
             skipTypes.reputation = true
-        elseif meta.sourceType == "currency" and meta.currencyID then
+        elseif (meta.sourceType == "currency_grind" or meta.sourceType == "currency") and meta.currencyID then
             input.progressRemaining = FB.ProgressResolver:GetCurrencyProgress(
                 meta.currencyID, meta.currencyRequired
             )
@@ -1202,8 +1214,8 @@ function FB.Mounts.Resolver:Resolve(mountIndex)
         -- Reclassify sourceType if we detected a primary requirement
         if input.factionID and guessedType ~= "reputation" then
             input.sourceType = "reputation"
-        elseif input.currencyID and guessedType ~= "currency" and not input.factionID then
-            input.sourceType = "currency"
+        elseif input.currencyID and guessedType ~= "currency_grind" and not input.factionID then
+            input.sourceType = "currency_grind"
         elseif input.achievementID and guessedType ~= "achievement"
                and not input.factionID and not input.currencyID then
             input.sourceType = "achievement"
@@ -1335,7 +1347,7 @@ function FB.Mounts.Resolver:ResolveSourceType(blizzType, sourceText)
                or lower:find("currency") or lower:find("badge") or lower:find("garrison resource")
                or lower:find("timewarped") or lower:find("honor point") or lower:find("conquest")
                or lower:find("polished pet charm") then
-                return "currency"
+                return "currency_grind"
             end
         end
 
@@ -1405,19 +1417,15 @@ function FB.Mounts.Resolver:GuessSourceType(sourceText)
     elseif lower:find("drop") then
         return "dungeon_drop"
     elseif lower:find("currency") or lower:find("token") then
-        return "currency"
+        return "currency_grind"
     end
 
     return "unknown"
 end
 
--- LOW-4: Expansion index is now the single authoritative copy in Constants.lua
--- (FB.EXPANSION_INDEX / FB.CURRENT_EXPANSION_INDEX). Local aliases for brevity.
-local EXPANSION_INDEX         = FB.EXPANSION_INDEX
-local CURRENT_EXPANSION_INDEX = FB.CURRENT_EXPANSION_INDEX
-
 -- Get a time multiplier based on content age (old content is trivially fast to clear)
 function FB.Mounts.Resolver:GetLegacyMultiplier(expansion)
+    EnsureExpansionLocals()
     if not expansion then return 0.5 end  -- Unknown expansion, assume moderate
     local idx = EXPANSION_INDEX[expansion]
     if not idx then return 0.5 end
@@ -1430,6 +1438,7 @@ end
 -- Get reasonable scoring defaults based on source type
 -- If expansion is known, adjusts time estimates and requirements for content age
 function FB.Mounts.Resolver:GetDefaultsForSourceType(sourceType, expansion)
+    EnsureExpansionLocals()
     local idx = expansion and EXPANSION_INDEX[expansion]
     local age = idx and (CURRENT_EXPANSION_INDEX - idx) or nil
 
@@ -1443,6 +1452,7 @@ function FB.Mounts.Resolver:GetDefaultsForSourceType(sourceType, expansion)
         world_boss       = { timePerAttempt = 5,  timeGate = "weekly",  groupRequirement = "solo",  lockoutScope = "account" },
         reputation       = { timePerAttempt = 30, timeGate = "daily",   groupRequirement = "solo",  expectedAttempts = 30,  lockoutScope = "character" },
         currency         = { timePerAttempt = 30, timeGate = "weekly",  groupRequirement = "solo",  expectedAttempts = 10,  lockoutScope = "character" },
+        currency_grind   = { timePerAttempt = 30, timeGate = "weekly",  groupRequirement = "solo",  expectedAttempts = 10,  lockoutScope = "character" },
         quest_chain      = { timePerAttempt = 60, timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 5,   lockoutScope = "character" },
         achievement      = { timePerAttempt = 30, timeGate = "none",    groupRequirement = "solo",  expectedAttempts = 10,  lockoutScope = "character" },
         profession       = { timePerAttempt = 30, timeGate = "daily",   groupRequirement = "solo",  expectedAttempts = 7,   lockoutScope = "character" },

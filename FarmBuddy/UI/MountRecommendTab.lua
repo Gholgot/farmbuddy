@@ -632,7 +632,9 @@ function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
     local ratio = 0  -- 0..1 fill ratio for the progress bar
 
     if goals.targetExpansion then
-        -- Count uncollected mounts for this expansion using cachedMountScores
+        -- Count uncollected mounts for this expansion using cachedMountScores.
+        -- BUG-6: Also compute total (collected + uncollected) from the Mount Journal
+        -- so that we can fill the progress bar with a real ratio.
         local remaining = 0
         if FB.db and FB.db.cachedMountScores then
             for _, r in ipairs(FB.db.cachedMountScores) do
@@ -641,18 +643,43 @@ function FB.UI.MountRecommendTab:UpdateGoalProgress(filteredResults)
                 end
             end
         end
+
+        -- Derive total and collected counts for this expansion directly from the journal
+        local totalForExp = 0
+        local collectedForExp = 0
+        if C_MountJournal and C_MountJournal.GetMountIDs then
+            local mountIDs = C_MountJournal.GetMountIDs()
+            if mountIDs then
+                for _, mid in ipairs(mountIDs) do
+                    local mOk, mName, mSpellID, _, _, _, _, _, _, _, _, mCollected =
+                        pcall(C_MountJournal.GetMountInfoByID, mid)
+                    if mOk and mSpellID then
+                        -- Check generated DB first, then curated DB for expansion tag
+                        local mExp = nil
+                        local genMeta = FB.MountDB_Generated and FB.MountDB_Generated[mSpellID]
+                        if genMeta then mExp = genMeta.expansion end
+                        if not mExp then
+                            local curMeta = FB.MountDB and FB.MountDB.entries and FB.MountDB.entries[mSpellID]
+                            if curMeta then mExp = curMeta.expansion end
+                        end
+                        if mExp == goals.targetExpansion then
+                            totalForExp = totalForExp + 1
+                            if mCollected then
+                                collectedForExp = collectedForExp + 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
         local expName = FB.EXPANSION_NAMES[goals.targetExpansion] or goals.targetExpansion
         text = string.format(
-            "%sGoal:|r %s - %d remaining",
-            FB.COLORS.GOLD, expName, remaining
+            "%sGoal:|r %s - %d / %d collected",
+            FB.COLORS.GOLD, expName, collectedForExp, totalForExp
         )
-        -- Estimate total from cached: collected + remaining
-        local totalEstimate = remaining  -- We only have remaining here, ratio stays 0 unless we can derive total
-        if FB.db.cachedMountScores then
-            -- All scored mounts for this expansion = remaining (uncollected only scored)
-            -- We can't easily derive collected count here, so leave ratio at 0 for expansion goal
-            ratio = 0
-        end
+        ratio = (totalForExp > 0) and (collectedForExp / totalForExp) or 0
+        ratio = math.min(ratio, 1.0)
     elseif goals.targetMountCount then
         local currentCount = 0
         if C_MountJournal and C_MountJournal.GetMountIDs then

@@ -31,7 +31,7 @@ local function ScanMountsByExpansion()
     for key, name in pairs(FB.EXPANSION_NAMES) do
         data[key] = {
             name = name,
-            order = FB.Data and FB.Data.ExpansionOrder and FB.Data.ExpansionOrder[key] or 0,
+            order = 0,
             total = 0,
             collected = 0,
             mounts = {},

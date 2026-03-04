@@ -443,7 +443,7 @@ FB.MountDB.entries = {
     -- CURRENCY MOUNTS
     -- =====================
     [171828] = { -- Mosshide Riverwallow (WoD Garrison)
-        sourceType = "currency",
+        sourceType = "currency_grind",
         expansion = "WOD",
         timeGate = "none",
         timePerAttempt = 5,
